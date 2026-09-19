@@ -10,12 +10,22 @@ class ProductCartSerializer(serializers.ModelSerializer):
 
 # Har cart item (Product + Quantity + item total)
 class CartItemSerializer(serializers.ModelSerializer):
+    # GET request (dekhne) ke liye yeh puri details dega
     product = ProductCartSerializer(read_only=True)
+    
+    # POST request (add karne) ke liye hum ID bhejenge
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), 
+        source='product', 
+        write_only=True
+    )
+    
     item_total = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
-        fields = ['id', 'product', 'quantity', 'item_total']
+        # product_id ko fields me add karna zaroori hai
+        fields = ['id', 'product', 'product_id', 'quantity', 'item_total']
 
     def get_item_total(self, obj):
         # Agar discount hai toh wo use karo, warna original price

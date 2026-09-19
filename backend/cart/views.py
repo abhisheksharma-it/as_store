@@ -1,6 +1,5 @@
 from django.shortcuts import render 
 from rest_framework.permissions import IsAuthenticated
-# Create your views here.
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -9,9 +8,7 @@ from catalog.models import Product
 from .serializers import CartSerializer
 
 class CartAPIView(APIView):
-   
     def get(self, request):
-      
         if request.user.is_authenticated:
             cart, created = Cart.objects.get_or_create(user=request.user)
         else:
@@ -35,7 +32,10 @@ class CartAPIView(APIView):
         except Product.DoesNotExist:
             return Response({"error": "Product nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
 
-        # FIX: Token hai toh account me daalo, warna session me
+        # --- NAYA LOGIC: INVENTORY/STOCK CHECK (ADD TO CART) ---
+        if not product.in_stock or quantity > product.stock:
+            return Response({"error": f"Out of stock! Sirf {product.stock} items godown me bache hain."}, status=status.HTTP_400_BAD_REQUEST)
+
         if request.user.is_authenticated:
             cart, created = Cart.objects.get_or_create(user=request.user)
         else:
@@ -48,29 +48,47 @@ class CartAPIView(APIView):
 
         cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
         if not created:
-            cart_item.quantity += quantity
+            # --- NAYA LOGIC: CHECK IF TOTAL QUANTITY IN CART EXCEEDS STOCK ---
+            total_quantity = cart_item.quantity + quantity
+            if total_quantity > product.stock:
+                return Response({"error": f"Aapke cart me pehle se item hai. Total quantity {product.stock} se zyada nahi ho sakti!"}, status=status.HTTP_400_BAD_REQUEST)
+            cart_item.quantity = total_quantity
         else:
             cart_item.quantity = quantity
         cart_item.save()
 
-        # Item add hone ke baad pura updated cart wapas bhej do
         serializer = CartSerializer(cart)
         return Response({"message": "Cart me add ho gaya!", "cart": serializer.data}, status=status.HTTP_200_OK)
 
+
 class CartItemDetailView(APIView):
-    # PUT: Quantity update karne ke liye (jaise + ya - dabane par)
+    # PUT: Quantity update karne ke liye
     def put(self, request, product_id):
-        cart_id = request.session.get('cart_id')
-        if not cart_id:
-            return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
+        if request.user.is_authenticated:
+            try:
+                cart = Cart.objects.get(user=request.user)
+            except Cart.DoesNotExist:
+                return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            cart_id = request.session.get('cart_id')
+            if not cart_id:
+                return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
+            try:
+                cart = Cart.objects.get(id=cart_id)
+            except Cart.DoesNotExist:
+                return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            cart_item = CartItem.objects.get(cart_id=cart_id, product_id=product_id)
+            cart_item = CartItem.objects.get(cart=cart, product_id=product_id)
             new_quantity = int(request.data.get('quantity', 1))
+            product = cart_item.product # Product object nikal liya
             
             if new_quantity <= 0:
-                cart_item.delete() # Agar quantity 0 kar di, toh item delete kar do
+                cart_item.delete()
                 return Response({"message": "Item cart se remove ho gaya!"}, status=status.HTTP_200_OK)
+            # --- NAYA LOGIC: INVENTORY CHECK (UPDATE CART) ---
+            elif new_quantity > product.stock:
+                return Response({"error": f"Stock Check! Sirf {product.stock} items hi available hain."}, status=status.HTTP_400_BAD_REQUEST)
             else:
                 cart_item.quantity = new_quantity
                 cart_item.save()
@@ -79,21 +97,30 @@ class CartItemDetailView(APIView):
         except CartItem.DoesNotExist:
             return Response({"error": "Item cart me nahi hai!"}, status=status.HTTP_404_NOT_FOUND)
 
-    # DELETE: Item ko cart se poori tarah hatane ke liye (Trash icon dabane par)
+    # DELETE: Item ko cart se hatane ke liye
     def delete(self, request, product_id):
-        cart_id = request.session.get('cart_id')
-        if not cart_id:
-            return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
+        if request.user.is_authenticated:
+            try:
+                cart = Cart.objects.get(user=request.user)
+            except Cart.DoesNotExist:
+                return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            cart_id = request.session.get('cart_id')
+            if not cart_id:
+                return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
+            try:
+                cart = Cart.objects.get(id=cart_id)
+            except Cart.DoesNotExist:
+                return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            cart_item = CartItem.objects.get(cart_id=cart_id, product_id=product_id)
+            cart_item = CartItem.objects.get(cart=cart, product_id=product_id)
             cart_item.delete()
             return Response({"message": "Item successfully cart se delete ho gaya!"}, status=status.HTTP_200_OK)
         except CartItem.DoesNotExist:
             return Response({"error": "Item cart me nahi hai!"}, status=status.HTTP_404_NOT_FOUND)
 
 class MergeCartAPIView(APIView):
-    # Yeh API sirf wahi chala sakta hai jiske paas Access Token ho (Logged in ho)
     permission_classes = [IsAuthenticated] 
 
     def get(self, request):
@@ -103,30 +130,27 @@ class MergeCartAPIView(APIView):
             return Response({"message": "Merge karne ke liye koi guest cart nahi mila."}, status=200)
 
         try:
-            # Guest cart uthao
             guest_cart = Cart.objects.get(id=session_cart_id, user__isnull=True)
-            
-            # User ka asli account wala cart uthao (ya naya banao)
             user_cart, created = Cart.objects.get_or_create(user=request.user)
             
-            # Agar dono alag carts hain, toh merge karo
             if guest_cart.id != user_cart.id:
                 for item in guest_cart.items.all():
-                    # Check karo ki kya yeh product pehle se account cart me hai
                     existing_item = CartItem.objects.filter(cart=user_cart, product=item.product).first()
                     if existing_item:
-                        existing_item.quantity += item.quantity
+                        # --- NAYA LOGIC: MERGE KARTE WAQT BHI STOCK CHECK ---
+                        new_qty = existing_item.quantity + item.quantity
+                        if new_qty > item.product.stock:
+                            existing_item.quantity = item.product.stock # Max stock assign kar do
+                        else:
+                            existing_item.quantity = new_qty
                         existing_item.save()
                     else:
                         item.cart = user_cart
                         item.save()
                 
-                # Purana khali guest cart delete kar do
                 guest_cart.delete()
             
-            # Session se cart ID hata do kyunki ab cart account me save ho gaya hai
             del request.session['cart_id']
-            
             return Response({"message": "Guest cart aapke account me successfully merge ho gaya!"}, status=200)
 
         except Cart.DoesNotExist:

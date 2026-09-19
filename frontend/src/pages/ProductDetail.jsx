@@ -2,6 +2,8 @@ import { useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useCartStore } from '../store/cartStore';
+import { Heart } from 'lucide-react'; // 🔴 Naya Import
+import { useWishlistStore } from '../store/wishlistStore'; // 🔴 Naya Import
 
 const ProductDetail = () => {
   const { id } = useParams(); 
@@ -12,6 +14,9 @@ const ProductDetail = () => {
   const [error, setError] = useState(null);
 
   const { addToCart } = useCartStore();
+  
+  // 🔴 Wishlist store se data nikala
+  const { wishlist, toggleWishlist } = useWishlistStore();
 
   useEffect(() => {
     const fetchProductDetails = async () => {
@@ -42,6 +47,9 @@ const ProductDetail = () => {
   if (loading) return <div className="pt-32 text-center text-white tracking-widest uppercase">Loading Product...</div>;
   if (error) return <div className="pt-32 text-center text-red-500 tracking-widest uppercase">{error}</div>;
   if (!product) return null;
+
+  // 🔴 Check: Kya ye product already wishlist me hai?
+  const isFavourited = wishlist.some((item) => item.product === product.id || item.product?.id === product.id);
 
   return (
     <div className="pt-24 pb-20 min-h-screen text-white max-w-[1800px] mx-auto px-4 md:px-8">
@@ -104,18 +112,37 @@ const ProductDetail = () => {
               )}
             </div>
 
-            <button 
-              // 🔥 YAHAN FIX KIYA HAI: Direct product pass kiya, quantity 1, size = selectedSize 🔥
-              onClick={() => addToCart(product, 1, selectedSize)}
-              className={`w-full py-4 text-xs uppercase tracking-[0.2em] font-medium transition-all duration-300 ${
-                selectedSize && product.stock > 0
-                  ? 'bg-white text-black hover:bg-gray-200' 
-                  : 'bg-white/10 text-gray-400 cursor-not-allowed'
-              }`}
-              disabled={!selectedSize || product.stock === 0}
-            >
-              {product.stock === 0 ? 'Out of Stock' : (selectedSize ? 'Add to Bag' : 'Select a Size')}
-            </button>
+            {/* 🔴 ACTION BUTTONS WRAPPER (Cart + Heart) */}
+            <div className="flex gap-3">
+              <button 
+                onClick={() => addToCart(product, 1, selectedSize)}
+                className={`flex-1 py-4 text-xs uppercase tracking-[0.2em] font-medium transition-all duration-300 ${
+                  selectedSize && product.stock > 0
+                    ? 'bg-white text-black hover:bg-gray-200' 
+                    : 'bg-white/10 text-gray-400 cursor-not-allowed'
+                }`}
+                disabled={!selectedSize || product.stock === 0}
+              >
+                {product.stock === 0 ? 'Out of Stock' : (selectedSize ? 'Add to Bag' : 'Select a Size')}
+              </button>
+
+              {/* 🔴 HEART BUTTON */}
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  toggleWishlist(product.id);
+                }}
+                className="w-[52px] h-[52px] shrink-0 flex items-center justify-center border border-white/20 hover:border-white transition-colors"
+              >
+                <Heart
+                  size={20}
+                  strokeWidth={1.5}
+                  fill={isFavourited ? "white" : "none"}
+                  className="text-white"
+                />
+              </button>
+            </div>
+            
           </div>
         </div>
       </div>

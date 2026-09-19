@@ -4,8 +4,11 @@ from .models import Wishlist
 class WishlistSerializer(serializers.ModelSerializer):
     product_title = serializers.ReadOnlyField(source='product.title')
     product_price = serializers.ReadOnlyField(source='product.price')
+    # 🔴 NAYI LINE: Image ka URL bhejne ke liye
+    product_image = serializers.ReadOnlyField(source='product.image_url') 
 
     class Meta:
         model = Wishlist
-        fields = ['id', 'product', 'product_title', 'product_price', 'created_at']
+        # 🔴 'product_image' ko is list me add kiya hai
+        fields = ['id', 'product', 'product_title', 'product_price', 'product_image', 'created_at']
         read_only_fields = ['user']

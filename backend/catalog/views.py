@@ -1,6 +1,10 @@
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from .models import Department, Category, Product
+from rest_framework import generics
+from rest_framework.filters import SearchFilter, OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from .serializers import ProductSearchSerializer
 
 def get_menu_api(request):
     menu_data = []
@@ -64,4 +68,83 @@ def category_products_api(request, category_id):
         'department_name': category.department.name,
         'total_products': products.count(),
         'products': product_list
+    })
+
+# Naya Search API View
+class ProductSearchAPIView(generics.ListAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSearchSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    
+    # Kin fields par search kaam karega
+    search_fields = ['title', 'description', 'category__name']
+    # Kin fields par sorting kaam karegi
+    ordering_fields = ['price', 'created_at']
+    # Kis field par exact filter lagega (e.g., is_new=True)
+    filterset_fields = ['is_new']
+
+
+def latest_products_api(request):
+    products = Product.objects.all().order_by('-created_at')[:8]
+    
+    product_list = []
+    for p in products:
+        # Pata karo ki kya primary image 'Image' field par hai ya 'images' inline/related field mein
+        image_url = None
+        
+        # Scenario 1: Agar 'image' seedha Product model par ek field hai
+        if hasattr(p, 'image') and p.image:
+             request_url = request.build_absolute_uri('/')[:-1]
+             image_url = f"{request_url}{p.image.url}"
+             
+        # Scenario 2: Agar 'images' ek related model (inline) hai (jaise tune pehle banaya tha)
+        elif hasattr(p, 'images') and p.images.exists():
+             first_image = p.images.first()
+             request_url = request.build_absolute_uri('/')[:-1]
+             image_url = f"{request_url}{first_image.image.url}"
+             
+        product_list.append({
+            'id': p.id,
+            'title': p.title,
+            'price': str(p.price),
+            'discount_price': str(p.discount_price) if p.discount_price else None,
+            'image_url': image_url,
+            'is_new': p.is_new
+        })
+        
+    return JsonResponse({
+        'status': 'success',
+        'products': product_list
+    })
+
+# Naya Product Detail API View
+
+def product_detail_api(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    
+    # Primary image nikalna
+    image_url = None
+    if hasattr(product, 'image') and product.image:
+        request_url = request.build_absolute_uri('/')[:-1]
+        image_url = f"{request_url}{product.image.url}"
+    elif hasattr(product, 'images') and product.images.exists():
+        first_image = product.images.first()
+        request_url = request.build_absolute_uri('/')[:-1]
+        image_url = f"{request_url}{first_image.image.url}"
+
+    product_data = {
+        'id': product.id,
+        'title': product.title,
+        'description': product.description,
+        'price': str(product.price),
+        'discount_price': str(product.discount_price) if product.discount_price else None,
+        'image_url': image_url,
+        'is_new': product.is_new,
+        'stock': product.stock,
+        'category': product.category.name if product.category else None,
+    }
+    
+    return JsonResponse({
+        'status': 'success',
+        'product': product_data
     })

@@ -3,13 +3,16 @@ import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import Login from './pages/Login';
 import Account from './pages/Account';
-import Checkout from './pages/Checkout'; // Import the Checkout page
-import ProtectedRoute from './components/ProtectedRoute'; // Import the ProtectedRoute component
+import Checkout from './pages/Checkout'; 
+import ProtectedRoute from './components/ProtectedRoute'; 
 // Pages
 import Home from './pages/Home';
 import ProductList from './pages/ProductList';
 import ProductDetail from './pages/ProductDetail';
-import CartDrawer from './components/ui/CartDrawer'; // Tune ye sahi import kiya tha
+import CartDrawer from './components/ui/CartDrawer'; 
+
+// 🔴 FIXED 1: Favourites page ko import kar liya
+import Favourites from './pages/Favourites'; 
 
 function App() {
   return (
@@ -30,6 +33,10 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/account" element={<Account />} />
             <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>}/>
+            
+            {/* 🔴 FIXED 2: Favourites ko as a valid React component <Favourites /> pass kiya */}
+            <Route path="/favourites" element={<ProtectedRoute><Favourites /></ProtectedRoute>}/> 
+            
           </Routes>
         </div>
         

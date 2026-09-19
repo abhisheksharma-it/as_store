@@ -6,7 +6,10 @@ from rest_framework import status
 from .models import Order, OrderItem, ShippingAddress
 from .serializers import OrderSerializer, ShippingAddressSerializer
 from cart.models import Cart
+# Product model import karna padega stock check ke liye
+from catalog.models import Product 
 
+# --- orders/views.py mein CheckoutAPIView ko REPACE karna hai ---
 
 class CheckoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -14,53 +17,71 @@ class CheckoutAPIView(APIView):
     def post(self, request):
         user = request.user
         address_id = request.data.get('address_id')
+        items = request.data.get('items', []) # React se direct items aayenge
 
         if not address_id:
             return Response({"error": "address_id provide karna mandatory hai."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not items:
+             return Response({"error": "Aapka cart khali hai (Frontend se data nahi aaya)!"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             shipping_address = ShippingAddress.objects.get(id=address_id, user=user)
         except ShippingAddress.DoesNotExist:
             return Response({"error": "Address exist nahi karta ya aapka nahi hai."}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            cart, created = Cart.objects.get_or_create(user=user)
-            cart_items = cart.items.all()
+        # 1. Total Calculate aur Stock Check karein
+        total_amount = 0
+        order_items_data = []
 
-            if not cart_items.exists():
-                return Response({"error": "Aapka cart khali hai!"}, status=status.HTTP_400_BAD_REQUEST)
+        for item in items:
+            try:
+                product = Product.objects.get(id=item['product_id'])
+            except Product.DoesNotExist:
+                return Response({"error": f"Product ID {item['product_id']} nahi mila."}, status=status.HTTP_404_NOT_FOUND)
+            
+            quantity = int(item['quantity'])
+            
+            # Stock check
+            if quantity > product.stock:
+                return Response({
+                    "error": f"Sorry! Checkout fail. '{product.title}' ka sirf {product.stock} stock bacha hai."
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            price = float(item['price'])
+            total_amount += (price * quantity)
+            
+            order_items_data.append({
+                'product': product,
+                'quantity': quantity,
+                'price': price,
+                'product_name': product.title
+            })
 
-            total_amount = sum(item.product.price * item.quantity for item in cart_items if item.product)
+        # 2. Order Create karein
+        order = Order.objects.create(
+            user=user,
+            shipping_address=shipping_address,
+            total_amount=total_amount
+        )
 
-            order = Order.objects.create(
-                user=user,
-                shipping_address=shipping_address,
-                total_amount=total_amount
+        # 3. Order Items Create karein
+        for item_data in order_items_data:
+            OrderItem.objects.create(
+                order=order,
+                product=item_data['product'],
+                product_name=item_data['product_name'],
+                price=item_data['price'],
+                quantity=item_data['quantity']
             )
 
-            for item in cart_items:
-                if item.product:
-                    OrderItem.objects.create(
-                        order=order,
-                        product=item.product,
-                        product_name=item.product.title,
-                        price=item.product.price,
-                        quantity=item.quantity
-                    )
-
-            cart_items.delete()
-
-            serializer = OrderSerializer(order)
-            return Response({
-                "message": "Order successfully place ho gaya! 🎉",
-                "order": serializer.data
-            }, status=status.HTTP_201_CREATED)
-
-        except Cart.DoesNotExist:
-            return Response({"error": "Cart nahi mila."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = OrderSerializer(order)
+        return Response({
+            "message": "Order successfully place ho gaya! 🎉",
+            "order": serializer.data
+        }, status=status.HTTP_201_CREATED)
 
 
-# 1. Mock Payment Initiation
 class InitiatePaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -74,7 +95,6 @@ class InitiatePaymentView(APIView):
         except Order.DoesNotExist:
             return Response({"error": "Order nahi mila."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Realistic Mock Order ID Generate karo (bina kisi external API call ke)
         mock_order_id = f"order_mock_{uuid.uuid4().hex[:14]}"
         order.razorpay_order_id = mock_order_id
         order.save()
@@ -88,13 +108,12 @@ class InitiatePaymentView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-# 2. Mock Payment Verification & Status Update
 class VerifyPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         razorpay_order_id = request.data.get('razorpay_order_id')
-        payment_status = request.data.get('status', 'success')  # success / failed simulate kar sakte ho
+        payment_status = request.data.get('status', 'success')
 
         if not razorpay_order_id:
             return Response({"error": "razorpay_order_id mandatory hai."}, status=status.HTTP_400_BAD_REQUEST)
@@ -104,16 +123,27 @@ class VerifyPaymentView(APIView):
         except Order.DoesNotExist:
             return Response({"error": "Invalid order reference."}, status=status.HTTP_404_NOT_FOUND)
 
+        # Agar order pehle hi paid ho chuka hai, toh dobara stock minus na ho
+        if order.status == 'Paid':
+            return Response({"message": "Order pehle se hi Paid hai!"}, status=status.HTTP_200_OK)
+
         if payment_status == 'success':
-            # Simulated payment successful
             order.razorpay_payment_id = f"pay_mock_{uuid.uuid4().hex[:14]}"
             order.razorpay_signature = f"sig_mock_{uuid.uuid4().hex[:20]}"
             order.status = 'Paid'
             order.save()
 
+            # --- NAYA LOGIC: INVENTORY STOCK DEDUCTION ---
+            order_items = OrderItem.objects.filter(order=order)
+            for item in order_items:
+                if item.product:
+                    # Database me se utni T-shirt minus kardo jitni order hui hain
+                    item.product.stock -= item.quantity
+                    item.product.save()
+
             serializer = OrderSerializer(order)
             return Response({
-                "message": "Payment verified successfully! Order Paid.",
+                "message": "Payment verified successfully! Order Paid and Stock Updated.",
                 "order": serializer.data
             }, status=status.HTTP_200_OK)
         else:

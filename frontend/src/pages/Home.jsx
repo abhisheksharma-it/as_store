@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import CategoryGrid from '../components/ui/CategoryGrid';
+import CategoryGrid from "../components/ui/MegaMenuSystem/CategoryGrid";
 import api from '../api';
 
 const Home = () => {

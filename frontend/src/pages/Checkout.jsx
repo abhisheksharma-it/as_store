@@ -3,13 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
 import api from '../api';
 
+const parsePrice = (priceVal) => {
+  if (!priceVal) return 0;
+  const num = parseFloat(String(priceVal).replace(/[^0-9.-]+/g, ""));
+  return isNaN(num) ? 0 : num;
+};
+
 const Checkout = () => {
   const navigate = useNavigate();
   const { cart, clearCart } = useCartStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Updated Address State to match Django Model Exactly
   const [address, setAddress] = useState({
     full_name: '',
     phone_number: '',
@@ -19,10 +24,10 @@ const Checkout = () => {
     pincode: '',
   });
 
+  // 🔴 FIXED: Ab hum nested product se price nikal rahe hain
   const cartTotal = cart.reduce((total, item) => {
-    const priceString = String(item.price).replace(/[^0-9.-]+/g, "");
-    const priceNum = parseFloat(priceString);
-    return total + (priceNum * item.quantity);
+    const actualPrice = item.product?.price || item.price;
+    return total + (parsePrice(actualPrice) * (item.quantity || 1));
   }, 0);
 
   const handleInputChange = (e) => {
@@ -30,53 +35,54 @@ const Checkout = () => {
     setAddress({ ...address, [name]: value });
   };
 
-  // --- NAYA UPDATED handlePlaceOrder (With Payment Flow) ---
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const orderItems = cart.map(item => ({
-      product_id: item.id,
-      quantity: item.quantity,
-      price: String(item.price).replace(/[^0-9.-]+/g, "")
-    }));
+    // 🔴 FIXED: Backend ko ab asli price jayega, ₹0 nahi
+    const orderItems = cart.map(item => {
+      const actualPrice = item.product?.price || item.price;
+      return {
+        product_id: item.product?.id || item.product_id || item.id,
+        quantity: item.quantity || 1,
+        price: parsePrice(actualPrice) 
+      };
+    });
+
+    // Security Check: Agar cart total hi 0 hai toh order place mat hone do
+    if (cartTotal === 0) {
+      setError("Error: Order total is ₹0. Please remove and re-add items to your cart.");
+      setLoading(false);
+      return;
+    }
 
     try {
-      // STEP 1: Address Save karo
       const addressResponse = await api.post('orders/address/', address);
       const addressId = addressResponse.data.data.id; 
 
-      // STEP 2: Checkout API (Order Create)
       const orderResponse = await api.post('orders/checkout/', {
         address_id: addressId,
         items: orderItems 
       });
       
       const orderId = orderResponse.data.order.id;
-      console.log('Order created, initiating payment for ID:', orderId);
 
-      // STEP 3: Payment Initiate (Razorpay Mock)
       const initResponse = await api.post('orders/payment/initiate/', {
         order_id: orderId
       });
       
       const mockRazorpayId = initResponse.data.razorpay_order_id;
       
-      // Yahan real app mein Razorpay ka popup khulta hai. 
-      // Abhi hum ek chhota alert dekar usko simulate kar rahe hain.
       alert(`Redirecting to Secure Payment Gateway...\nAmount: ₹${initResponse.data.amount}\n(Click OK to simulate successful payment)`);
 
-      // STEP 4: Payment Verify & Stock Deduction
       const verifyResponse = await api.post('orders/payment/verify/', {
         razorpay_order_id: mockRazorpayId,
-        status: 'success' // Hum hardcode success bhej rahe hain mock ke liye
+        status: 'success' 
       });
 
-      console.log('Payment Verified:', verifyResponse.data);
-
-      clearCart(); // Cart khali karo
-      navigate('/account'); // Dashboard pe bhejo
+      clearCart(); 
+      navigate('/account'); 
       
     } catch (err) {
       console.error('Checkout error:', err.response?.data || err);
@@ -85,7 +91,6 @@ const Checkout = () => {
       setLoading(false);
     }
   };
-  // -------------------------------------------
 
   if (cart.length === 0) {
     return (
@@ -103,10 +108,9 @@ const Checkout = () => {
       {error && <div className="bg-red-900/50 border border-red-500 text-red-200 text-xs p-4 mb-8 tracking-wide uppercase text-center">{error}</div>}
 
       <div className="flex flex-col lg:flex-row gap-16">
-        {/* Left Side: Shipping Form */}
         <div className="w-full lg:w-2/3">
           <h2 className="text-sm tracking-widest uppercase mb-8 border-b border-white/10 pb-4">Shipping Details</h2>
-          <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-6">
+          <form onSubmit={handlePlaceOrder} className="space-y-6">
             
             <div className="grid grid-cols-2 gap-6">
               <div>
@@ -139,40 +143,45 @@ const Checkout = () => {
               </div>
             </div>
 
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-full bg-white text-black py-4 text-xs font-medium uppercase tracking-[0.2em] hover:bg-gray-200 transition-colors disabled:bg-white/50 mt-8"
+            >
+              {loading ? 'Processing...' : 'Place Order'}
+            </button>
           </form>
         </div>
 
-        {/* Right Side: Order Summary */}
-        <div className="w-full lg:w-1/3 bg-[#0a0a0a] p-8 border border-white/10">
+        <div className="w-full lg:w-1/3 bg-[#0a0a0a] p-8 border border-white/10 h-fit">
           <h2 className="text-sm tracking-widest uppercase mb-6">Order Summary</h2>
           <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2">
-            {cart.map((item, index) => (
-              <div key={index} className="flex justify-between items-center text-sm font-light">
-                <div className="flex items-center gap-3">
-                   <img src={item.image} alt="product" className="w-10 h-14 object-cover" />
-                   <div>
-                     <p className="text-gray-300 text-xs">{item.name}</p>
-                     <p className="text-[10px] text-gray-500 mt-1">QTY: {item.quantity}</p>
-                   </div>
+            {cart.map((item, index) => {
+              // 🔴 FIXED: Image, Name aur Price ki sahi mapping
+              const pImage = item.product?.image_url || item.product?.image || item.image;
+              const pName = item.product?.title || item.product?.name || item.name;
+              const pPrice = item.product?.price || item.price;
+
+              return (
+                <div key={index} className="flex justify-between items-center text-sm font-light">
+                  <div className="flex items-center gap-3">
+                     <img src={pImage} alt="product" className="w-10 h-14 object-cover" />
+                     <div>
+                       <p className="text-gray-300 text-xs">{pName}</p>
+                       <p className="text-[10px] text-gray-500 mt-1">QTY: {item.quantity}</p>
+                     </div>
+                  </div>
+                  <span>₹{parsePrice(pPrice)}</span>
                 </div>
-                <span>{item.price}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
-          <div className="border-t border-white/10 pt-4 mb-6">
+          <div className="border-t border-white/10 pt-4">
             <div className="flex justify-between items-center text-lg font-light">
               <span className="text-xs tracking-widest uppercase text-gray-400">Total</span>
               <span>₹{cartTotal.toFixed(2)}</span>
             </div>
           </div>
-          <button 
-            type="submit" 
-            form="checkout-form" 
-            disabled={loading}
-            className="w-full bg-white text-black py-4 text-xs font-medium uppercase tracking-[0.2em] hover:bg-gray-200 transition-colors disabled:bg-white/50"
-          >
-            {loading ? 'Processing...' : 'Place Order'}
-          </button>
         </div>
       </div>
     </div>
