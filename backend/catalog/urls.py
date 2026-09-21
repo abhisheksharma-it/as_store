@@ -5,7 +5,7 @@ from .views import (
     category_products_api, 
     ProductSearchAPIView, 
     latest_products_api,
-    product_detail_api  # 🔥 Naya import add kar diya yahan
+    product_detail_api  
 )
 
 urlpatterns = [
@@ -17,6 +17,6 @@ urlpatterns = [
     # Route Home page products ke liye:
     path('latest-products/', latest_products_api, name='latest-products-api'),
     
-    # 🔥 Naya Route Product Detail page ke liye:
+    # Naya Route Product Detail page ke liye:
     path('product/<int:product_id>/', product_detail_api, name='product-detail-api'),
 ]

@@ -3,19 +3,20 @@ import { Search, User, Heart, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../../../store/cartStore';
 import { useAuthStore } from '../../../store/authStore';
 import { useNavigate } from 'react-router-dom';
-import SearchDrawer from '../../ui/SearchDrawer'; // 🔴 Tera naya Bolt wala component yahan import ho gaya
+import SearchDrawer from '../../ui/SearchDrawer'; 
 
 const NavIcons = () => {
-  const { openCart, cart } = useCartStore();
+  // 🔴 'openCart' hata diya kyunki ab page change karna hai
+  const { cart } = useCartStore();
   const { isAuthenticated, user } = useAuthStore(); 
   const navigate = useNavigate();
   
-  // 🔴 Search drawer ke liye local state
   const [isSearchOpen, setIsSearchOpen] = useState(false); 
 
   const handleIconClick = (label) => {
     if (label === 'Bag') {
-      openCart();
+      // 🔴 MAIN CHANGE: Drawer ki jagah naye Cart page par navigate karega
+      navigate('/cart');
     } else if (label === 'Account') {
       if (isAuthenticated) {
         navigate('/account');
@@ -23,9 +24,9 @@ const NavIcons = () => {
         navigate('/login');
       }
     } else if (label === 'Search') {
-      setIsSearchOpen(true); // 🔴 Click hone pe Drawer true ho jayega
+      setIsSearchOpen(true); 
     } else if (label === 'Wishlist') {
-      navigate('/favourites'); // 🔴 Click hone pe Favourites page khulega
+      navigate('/favourites'); 
     }
   };
 
@@ -73,7 +74,6 @@ const NavIcons = () => {
             )}
         </button>
 
-        {/* 🔴 SEARCH DRAWER MOUNTED HERE */}
         <SearchDrawer isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </div>
   );

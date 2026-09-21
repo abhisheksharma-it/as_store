@@ -5,14 +5,12 @@ import Login from './pages/Login';
 import Account from './pages/Account';
 import Checkout from './pages/Checkout'; 
 import ProtectedRoute from './components/ProtectedRoute'; 
-// Pages
 import Home from './pages/Home';
 import ProductList from './pages/ProductList';
 import ProductDetail from './pages/ProductDetail';
-import CartDrawer from './components/ui/CartDrawer'; 
-
-// 🔴 FIXED 1: Favourites page ko import kar liya
 import Favourites from './pages/Favourites'; 
+// 1. Naya CartPage import kar
+import CartPage from './components/ui/CartPage'; 
 
 function App() {
   return (
@@ -20,8 +18,7 @@ function App() {
       <div className="min-h-screen bg-black flex flex-col">
         <Navbar />
         
-        {/* CART DRAWER YAHAN LAGEGA - Navbar ke theek neeche */}
-        <CartDrawer /> 
+        {/* 2. Yahan se <CartDrawer /> hata diya hai kyunki ab full page use hoga */}
         
         <div className="flex-grow">
           <Routes>
@@ -32,11 +29,27 @@ function App() {
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/login" element={<Login />} />
             <Route path="/account" element={<Account />} />
-            <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>}/>
             
-            {/* 🔴 FIXED 2: Favourites ko as a valid React component <Favourites /> pass kiya */}
-            <Route path="/favourites" element={<ProtectedRoute><Favourites /></ProtectedRoute>}/> 
+            {/* 3. Naya Cart Route Add Kiya */}
+            <Route path="/cart" element={<CartPage />} />
             
+            {/* Protected Routes */}
+            <Route 
+              path="/checkout" 
+              element={
+                <ProtectedRoute>
+                  <Checkout />
+                </ProtectedRoute>
+              }
+            />
+            <Route 
+              path="/favourites" 
+              element={
+                <ProtectedRoute>
+                  <Favourites />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </div>
         

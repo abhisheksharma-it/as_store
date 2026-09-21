@@ -1,9 +1,10 @@
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
-from .models import Department, Category, Product
 from rest_framework import generics
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
+
+from .models import Department, Category, Product
 from .serializers import ProductSearchSerializer
 
 def get_menu_api(request):
@@ -12,8 +13,17 @@ def get_menu_api(request):
     
     for dept in departments:
         # parent__isnull=True lagane se sirf main categories ayengi, andar ki t-shirts nahi
-        normal_links = list(Category.objects.filter(department=dept, is_featured=False, parent__isnull=True).values('id', 'name', 'section_name'))
-        featured_links = list(Category.objects.filter(department=dept, is_featured=True, parent__isnull=True).values('id', 'name', 'image'))
+        normal_links = list(Category.objects.filter(
+            department=dept, 
+            is_featured=False, 
+            parent__isnull=True
+        ).values('id', 'name', 'section_name'))
+        
+        featured_links = list(Category.objects.filter(
+            department=dept, 
+            is_featured=True, 
+            parent__isnull=True
+        ).values('id', 'name', 'image'))
         
         menu_data.append({
             'department': dept.name,
@@ -23,6 +33,7 @@ def get_menu_api(request):
         })
         
     return JsonResponse({'status': 'success', 'menu': menu_data})
+
 
 def get_subcategories_api(request, category_id):
     parent_category = get_object_or_404(Category, id=category_id)
@@ -44,15 +55,22 @@ def get_subcategories_api(request, category_id):
         'sections': sections
     })
 
+
 def category_products_api(request, category_id):
     category = get_object_or_404(Category, id=category_id)
     products = Product.objects.filter(category=category)
     
     product_list = []
     for p in products:
-        first_image = p.images.first() 
-        image_url = first_image.image.url if first_image else None
-        
+        image_url = None
+        if hasattr(p, 'image') and p.image:
+             request_url = request.build_absolute_uri('/')[:-1]
+             image_url = f"{request_url}{p.image.url}"
+        elif hasattr(p, 'images') and p.images.exists():
+             first_image = p.images.first()
+             request_url = request.build_absolute_uri('/')[:-1]
+             image_url = f"{request_url}{first_image.image.url}"
+             
         product_list.append({
             'id': p.id,
             'title': p.title,
@@ -65,23 +83,27 @@ def category_products_api(request, category_id):
     return JsonResponse({
         'status': 'success',
         'category_name': category.name,
-        'department_name': category.department.name,
+        'department_name': category.department.name if category.department else None,
         'total_products': products.count(),
         'products': product_list
     })
 
-# Naya Search API View
+
+# 🔴 MAIN SEARCH API VIEW (Jisko React fetch kar raha hai)
 class ProductSearchAPIView(generics.ListAPIView):
-    queryset = Product.objects.all()
+    # Default ordering add ki hai taaki DRF pagination warnings na de
+    queryset = Product.objects.all().order_by('-created_at')
     serializer_class = ProductSearchSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     
-    # Kin fields par search kaam karega
-    search_fields = ['title', 'description', 'category__name']
+    # Kin fields par search kaam karega (Department bhi add kiya gaya hai safety ke liye)
+    search_fields = ['title', 'description', 'category__name', 'category__department__name']
+    
     # Kin fields par sorting kaam karegi
     ordering_fields = ['price', 'created_at']
-    # Kis field par exact filter lagega (e.g., is_new=True)
-    filterset_fields = ['is_new']
+    
+    # Kis field par exact filter lagega
+    filterset_fields = ['is_new', 'category__name']
 
 
 def latest_products_api(request):
@@ -89,7 +111,6 @@ def latest_products_api(request):
     
     product_list = []
     for p in products:
-        # Pata karo ki kya primary image 'Image' field par hai ya 'images' inline/related field mein
         image_url = None
         
         # Scenario 1: Agar 'image' seedha Product model par ek field hai
@@ -97,7 +118,7 @@ def latest_products_api(request):
              request_url = request.build_absolute_uri('/')[:-1]
              image_url = f"{request_url}{p.image.url}"
              
-        # Scenario 2: Agar 'images' ek related model (inline) hai (jaise tune pehle banaya tha)
+        # Scenario 2: Agar 'images' ek related model (inline) hai
         elif hasattr(p, 'images') and p.images.exists():
              first_image = p.images.first()
              request_url = request.build_absolute_uri('/')[:-1]
@@ -117,7 +138,6 @@ def latest_products_api(request):
         'products': product_list
     })
 
-# Naya Product Detail API View
 
 def product_detail_api(request, product_id):
     product = get_object_or_404(Product, id=product_id)
@@ -142,6 +162,8 @@ def product_detail_api(request, product_id):
         'is_new': product.is_new,
         'stock': product.stock,
         'category': product.category.name if product.category else None,
+        # Department explicitly bheja ja raha hai taaki frontend perfectly map kar sake
+        'department': product.category.department.name if product.category and product.category.department else None,
     }
     
     return JsonResponse({

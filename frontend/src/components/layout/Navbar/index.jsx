@@ -8,7 +8,6 @@ const Navbar = () => {
   const [activeCategory, setActiveCategory] = useState(null);
   const closeTimer = useRef(null);
 
-  // Triggered by NavLinks onHover
   const handleMenuEnter = (category) => {
     if (closeTimer.current) {
       clearTimeout(closeTimer.current);
@@ -17,14 +16,12 @@ const Navbar = () => {
     setActiveCategory(category);
   };
 
-  // Triggered by NavLinks onLeave or MegaMenu onMouseLeave
   const handleMenuLeave = () => {
     closeTimer.current = setTimeout(() => {
       setActiveCategory(null);
     }, 300);
   };
 
-  // Keeps the menu open when cursor moves down into the drawer
   const handleDrawerEnter = () => {
     if (closeTimer.current) {
       clearTimeout(closeTimer.current);
@@ -48,7 +45,6 @@ const Navbar = () => {
               A&amp;S
             </a>
 
-            {/* Exactly matching the props your NavLinks.jsx is expecting */}
             <NavLinks 
               activeMenu={activeCategory} 
               onHover={handleMenuEnter} 
@@ -65,7 +61,11 @@ const Navbar = () => {
         onMouseEnter={handleDrawerEnter} 
         onMouseLeave={handleMenuLeave}
       >
-        <MegaMenu activeMenu={activeCategory} />
+        {/* 🔥 YAHAN CHANGE KIYA HAI: onClose prop add kiya */}
+        <MegaMenu 
+          activeMenu={activeCategory} 
+          onClose={() => setActiveCategory(null)} 
+        />
       </div>
     </header>
   );
