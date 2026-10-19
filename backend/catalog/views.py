@@ -5,7 +5,8 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Department, Category, Product
-from .serializers import ProductSearchSerializer
+# 🔴 YAHAN MAINEY ProductSerializer KO BHI IMPORT ME JOD DIYA HAI
+from .serializers import ProductSearchSerializer, ProductSerializer
 
 def get_menu_api(request):
     menu_data = []
@@ -89,21 +90,32 @@ def category_products_api(request, category_id):
     })
 
 
-# 🔴 MAIN SEARCH API VIEW (Jisko React fetch kar raha hai)
+# MAIN SEARCH API VIEW
 class ProductSearchAPIView(generics.ListAPIView):
-    # Default ordering add ki hai taaki DRF pagination warnings na de
-    queryset = Product.objects.all().order_by('-created_at')
     serializer_class = ProductSearchSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     
-    # Kin fields par search kaam karega (Department bhi add kiya gaya hai safety ke liye)
     search_fields = ['title', 'description', 'category__name', 'category__department__name']
-    
-    # Kin fields par sorting kaam karegi
     ordering_fields = ['price', 'created_at']
-    
-    # Kis field par exact filter lagega
-    filterset_fields = ['is_new', 'category__name']
+
+    def get_queryset(self):
+        queryset = Product.objects.all().order_by('-created_at')
+        
+        # URL parameters lo
+        dept = self.request.query_params.get('department')
+        cat = self.request.query_params.get('category')
+
+        if dept:
+            # Hyphen ko space me convert karo aur icontains lagao
+            dept = dept.replace("-", " ") 
+            queryset = queryset.filter(category__department__name__icontains=dept)
+            
+        if cat:
+            # "new-in" ban jayega "new in", jo "NEW IN" se match ho jayega
+            cat = cat.replace("-", " ") 
+            queryset = queryset.filter(category__name__icontains=cat)
+
+        return queryset
 
 
 def latest_products_api(request):
@@ -113,12 +125,10 @@ def latest_products_api(request):
     for p in products:
         image_url = None
         
-        # Scenario 1: Agar 'image' seedha Product model par ek field hai
         if hasattr(p, 'image') and p.image:
              request_url = request.build_absolute_uri('/')[:-1]
              image_url = f"{request_url}{p.image.url}"
              
-        # Scenario 2: Agar 'images' ek related model (inline) hai
         elif hasattr(p, 'images') and p.images.exists():
              first_image = p.images.first()
              request_url = request.build_absolute_uri('/')[:-1]
@@ -139,34 +149,14 @@ def latest_products_api(request):
     })
 
 
+# 🔴 PERMANENT BUG FIX: MANUAL DICTIONARY HATA KAR SERIALIZER LAGA DIYA
 def product_detail_api(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     
-    # Primary image nikalna
-    image_url = None
-    if hasattr(product, 'image') and product.image:
-        request_url = request.build_absolute_uri('/')[:-1]
-        image_url = f"{request_url}{product.image.url}"
-    elif hasattr(product, 'images') and product.images.exists():
-        first_image = product.images.first()
-        request_url = request.build_absolute_uri('/')[:-1]
-        image_url = f"{request_url}{first_image.image.url}"
-
-    product_data = {
-        'id': product.id,
-        'title': product.title,
-        'description': product.description,
-        'price': str(product.price),
-        'discount_price': str(product.discount_price) if product.discount_price else None,
-        'image_url': image_url,
-        'is_new': product.is_new,
-        'stock': product.stock,
-        'category': product.category.name if product.category else None,
-        # Department explicitly bheja ja raha hai taaki frontend perfectly map kar sake
-        'department': product.category.department.name if product.category and product.category.department else None,
-    }
+    # Serializer automatically tere materials, delivery, colors aur saari photos (gallery_images) nikal lega
+    serializer = ProductSerializer(product, context={'request': request})
     
     return JsonResponse({
         'status': 'success',
-        'product': product_data
+        'product': serializer.data
     })

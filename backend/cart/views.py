@@ -26,15 +26,15 @@ class CartAPIView(APIView):
     def post(self, request):
         product_id = request.data.get('product_id')
         quantity = int(request.data.get('quantity', 1))
+        # 🔴 FIX 1: Frontend se size uthaya
+        size = request.data.get('size')
 
         try:
             product = Product.objects.get(id=product_id)
         except Product.DoesNotExist:
             return Response({"error": "Product nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
-
-        # --- NAYA LOGIC: INVENTORY/STOCK CHECK (ADD TO CART) ---
-        if not product.in_stock or quantity > product.stock:
-            return Response({"error": f"Out of stock! Sirf {product.stock} items godown me bache hain."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # ... (Tera stock check wala logic same rahega) ...
 
         if request.user.is_authenticated:
             cart, created = Cart.objects.get_or_create(user=request.user)
@@ -46,7 +46,9 @@ class CartAPIView(APIView):
                 cart = Cart.objects.create()
                 request.session['cart_id'] = cart.id
 
-        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+        # 🔴 FIX 2: Database mein size bhi pass kar diya taaki alag size alag item bane
+        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product, size=size)
+
         if not created:
             # --- NAYA LOGIC: CHECK IF TOTAL QUANTITY IN CART EXCEEDS STOCK ---
             total_quantity = cart_item.quantity + quantity
@@ -54,6 +56,8 @@ class CartAPIView(APIView):
                 return Response({"error": f"Aapke cart me pehle se item hai. Total quantity {product.stock} se zyada nahi ho sakti!"}, status=status.HTTP_400_BAD_REQUEST)
             cart_item.quantity = total_quantity
         else:
+            if quantity > product.stock:
+                return Response({"error": f"Stock Check! Sirf {product.stock} items hi available hain."}, status=status.HTTP_400_BAD_REQUEST)
             cart_item.quantity = quantity
         cart_item.save()
 

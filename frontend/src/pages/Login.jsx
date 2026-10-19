@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const navigate = useNavigate();
   
-  // Zustand store se function aur state nikalna
+  const navigate = useNavigate();
+  const location = useLocation();
+  
   const { login, isLoading, error, clearError } = useAuthStore();
+
+  const from = location.state?.from || '/'; 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,8 +19,7 @@ const Login = () => {
     
     const success = await login(email, password);
     if (success) {
-      // Login successful hone pe, user ko home page ya checkout par bhej do
-      navigate('/');
+      navigate(from, { replace: true });
     }
   };
 
@@ -88,6 +90,7 @@ const Login = () => {
           </p>
           <button 
             type="button"
+            onClick={() => navigate('/register')} // 🔴 FIXED: Ab ye register page par le jayega
             className="w-full border border-white text-white py-4 text-xs font-medium uppercase tracking-[0.2em] hover:bg-white hover:text-black transition-colors"
           >
             Register Now

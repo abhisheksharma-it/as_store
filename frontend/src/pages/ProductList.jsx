@@ -1,15 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+// src/pages/ProductList.jsx
+import React, { useEffect, useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import axios from 'axios';
-import { Heart } from 'lucide-react'; 
-import { useWishlistStore } from '../store/wishlistStore'; 
+import { useWishlistStore } from '../store/wishlistStore';
+import ProductCard from '../components/product/ProductCard';
 
-const ProductList = () => {
+export default function ProductList() {
   const { department, category } = useParams();
-  
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sortBy, setSortBy] = useState('newest');
+  const [inStockOnly, setInStockOnly] = useState(false);
 
   const { wishlist, toggleWishlist, fetchWishlist } = useWishlistStore();
 
@@ -17,63 +19,82 @@ const ProductList = () => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await axios.get('http://127.0.0.1:8000/api/catalog/search/');
-        setProducts(response.data); 
-        setLoading(false);
+        const params = {};
+        if (department) params.department = department;
+        if (category) params.category = category;
+
+        const response = await axios.get('http://127.0.0.1:8000/api/catalog/search/', { params });
+        const data = response.data.results || response.data.products || response.data;
+        setProducts(Array.isArray(data) ? data : []);
+        setError(null);
       } catch (err) {
-        console.error("Error fetching products:", err);
-        setError("Failed to load products. Is backend running?");
+        console.error('Error fetching products:', err);
+        setError('Failed to load products. Is backend running?');
+      } finally {
         setLoading(false);
       }
     };
 
     fetchProducts();
-    fetchWishlist(); 
-  }, [fetchWishlist]); 
+    fetchWishlist();
+  }, [department, category, fetchWishlist]);
 
-  // 🔴 FIXED ARCHITECTURE: Bulletproof deep filtering logic
-  const filteredProducts = products.filter((p) => {
-    // Check if category matches
-    if (category) {
-      const targetCat = category.toLowerCase().replace('-', ' ');
-      // Handle Django's potential different JSON structures (nested object vs flat string)
-      const catName = (typeof p.category === 'object' ? p.category?.name : p.category_name || p.category || '').toLowerCase();
-      if (!catName.includes(targetCat)) return false;
+  const displayedProducts = useMemo(() => {
+    let list = [...products];
+    if (inStockOnly) {
+      list = list.filter((p) => Number(p.stock ?? 0) > 0);
     }
-
-    // Check if department matches
-    if (department) {
-      const targetDept = department.toLowerCase();
-      const deptName = (typeof p.department === 'object' ? p.department?.name : p.department || p.category?.department?.name || '').toLowerCase();
-      // Only filter out if department data actually exists on the product but doesn't match
-      if (deptName && !deptName.includes(targetDept)) return false;
+    if (sortBy === 'price-asc') {
+      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortBy === 'price-desc') {
+      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sortBy === 'newest') {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
     }
+    return list;
+  }, [products, sortBy, inStockOnly]);
 
-    return true;
-  });
-
-  let pageTitle = 'New Arrivals';
-  if (category) pageTitle = category.replace('-', ' '); 
-  else if (department) pageTitle = department;
-
-  const placeholderImage = 'https://images.pexels.com/photos/1126993/pexels-photo-1126993.jpeg?auto=compress&cs=tinysrgb&w=600';
+  const pageTitle = category ? category.replace(/-/g, ' ') : department || 'New Arrivals';
 
   return (
     <div className="pt-28 pb-20 min-h-screen bg-black text-white px-6 md:px-12 max-w-[1800px] mx-auto">
-      
-      {/* Dynamic Header */}
-      <header className="mb-10 border-b border-neutral-800 pb-6">
-        {department && (
-          <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-500 mb-2">
-            {department}
-          </p>
-        )}
-        <h1 className="text-2xl font-light tracking-[0.25em] uppercase">
-          {pageTitle}
-        </h1>
+      <header className="mb-8 border-b border-[#222] pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          {department && (
+            <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-500 mb-2">{department}</p>
+          )}
+          <h1 className="text-2xl font-light tracking-[0.25em] uppercase">{pageTitle}</h1>
+        </div>
+
+        {/* H&M Minimalist Filter & Sort Bar */}
+        <div className="flex flex-wrap items-center gap-6 text-[10px] uppercase tracking-[0.2em]">
+          <span className="text-neutral-500">{displayedProducts.length} Items</span>
+
+          <label className="flex items-center gap-2 cursor-pointer text-neutral-300 hover:text-white">
+            <input
+              type="checkbox"
+              checked={inStockOnly}
+              onChange={(e) => setInStockOnly(e.target.checked)}
+              className="accent-white"
+            />
+            In Stock Only
+          </label>
+
+          <div className="flex items-center gap-2">
+            <span className="text-neutral-500">Sort By:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-black border border-[#333] px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white outline-none focus:border-white"
+            >
+              <option value="newest">Newest</option>
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+            </select>
+          </div>
+        </div>
       </header>
 
-      {/* Main Grid */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-12 mt-10">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
@@ -81,75 +102,28 @@ const ProductList = () => {
           ))}
         </div>
       ) : error ? (
-        <div className="py-20 text-center text-red-500 text-xs uppercase tracking-[0.15em]">
-          {error}
-        </div>
-      ) : filteredProducts.length === 0 ? (
-        <div className="py-20 text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
-            No products found in this category.
-          </p>
+        <div className="py-20 text-center text-red-400 text-xs uppercase tracking-[0.2em]">{error}</div>
+      ) : displayedProducts.length === 0 ? (
+        <div className="py-20 text-center text-xs uppercase tracking-[0.2em] text-neutral-500">
+          No products found matching your selection.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-12 mt-10">
-          {filteredProducts.map((product) => {
-            
-            const isFavourited = wishlist.some((item) => item.product === product.id || item.product?.id === product.id);
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-12 mt-8">
+          {displayedProducts.map((product) => {
+            const isFavourited = wishlist.some(
+              (item) => item.product === product.id || item.product?.id === product.id
+            );
             return (
-              <Link to={`/product/${product.id}`} key={product.id} className="group cursor-pointer block">
-                <div className="aspect-[3/4] overflow-hidden mb-4 bg-[#111] relative">
-                  <img
-                    src={product.image_url || placeholderImage}
-                    alt={product.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out opacity-90 group-hover:opacity-100"
-                  />
-                  
-                  {/* Wishlist Button */}
-                  <button 
-                    onClick={(e) => {
-                      e.preventDefault(); 
-                      e.stopPropagation(); 
-                      toggleWishlist(product.id);
-                    }}
-                    className="absolute top-4 right-4 z-10 transition-transform duration-200 hover:scale-110"
-                  >
-                    <Heart 
-                      size={22} 
-                      strokeWidth={1.5}
-                      fill={isFavourited ? "white" : "none"} 
-                      className="text-white"
-                    />
-                  </button>
-
-                  {/* Quick Add Overlay */}
-                  <div className="absolute bottom-0 left-0 w-full p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out">
-                    <button 
-                      className="w-full bg-white text-black text-[10px] uppercase tracking-[0.2em] font-medium py-3 hover:bg-gray-200 transition-colors"
-                      onClick={(e) => { 
-                        e.preventDefault(); 
-                        e.stopPropagation(); 
-                        // Add quick add logic here if needed
-                      }}
-                    >
-                      Quick Add
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center text-center">
-                  <h2 className="text-[11px] font-light tracking-widest text-gray-300 mb-1.5 line-clamp-1 w-full uppercase">
-                    {product.title}
-                  </h2>
-                  <p className="text-xs tracking-wide text-neutral-400">₹{product.price}</p>
-                </div>
-              </Link>
+              <ProductCard
+                key={product.id}
+                product={product}
+                isFavourited={isFavourited}
+                onToggleWishlist={toggleWishlist}
+              />
             );
           })}
         </div>
       )}
     </div>
   );
-};
-
-export default ProductList;
+}

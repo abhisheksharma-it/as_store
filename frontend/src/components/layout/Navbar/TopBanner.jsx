@@ -1,11 +1,12 @@
-const TopBanner = () => {
+// src/components/layout/AnnouncementBar.jsx
+import React from 'react';
+
+export default function AnnouncementBar() {
   return (
-    <div className="w-full bg-black text-white text-center py-2.5 text-[11px] tracking-[0.15em] uppercase font-light border-b border-white/10">
-      <span className="opacity-80">
-        Free shipping on orders over $40 — Members get free returns
-      </span>
+    <div className="w-full bg-black border-b border-[#1a1a1a] py-2.5 px-4 text-center">
+      <p className="text-[10px] font-light uppercase tracking-[0.25em] text-neutral-300">
+        Free shipping on orders over ₹4,999 — Members get free returns
+      </p>
     </div>
   );
-};
-
-export default TopBanner;
+}

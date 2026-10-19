@@ -4,9 +4,20 @@ from catalog.models import Product
 
 # Cart me product ki details dikhane ke liye
 class ProductCartSerializer(serializers.ModelSerializer):
+    # 🔴 FIX: Yahan frontend ko image ka full path aur color name denge
+    image_url = serializers.SerializerMethodField()
+    color_name = serializers.CharField(read_only=True)
+
     class Meta:
         model = Product
-        fields = ['id', 'title', 'price', 'discount_price', ] # Baad me image bhi add kar lenge
+        # 🔴 FIX: Fields me 'image_url' aur 'color_name' add kar diya
+        fields = ['id', 'title', 'price', 'discount_price', 'image_url', 'color_name'] 
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if hasattr(obj, 'image') and obj.image:
+            return request.build_absolute_uri(obj.image.url) if request else f"http://127.0.0.1:8000{obj.image.url}"
+        return None
 
 # Har cart item (Product + Quantity + item total)
 class CartItemSerializer(serializers.ModelSerializer):
@@ -20,12 +31,15 @@ class CartItemSerializer(serializers.ModelSerializer):
         write_only=True
     )
     
+    # 🔴 NAYA FIX: Frontend ko size chahiye (update / delete properly karne ke liye)
+    size = serializers.CharField(required=False, allow_null=True)
+    
     item_total = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
-        # product_id ko fields me add karna zaroori hai
-        fields = ['id', 'product', 'product_id', 'quantity', 'item_total']
+        # 🔴 FIX: size field include kiya taaki CartPage me size dhik sake
+        fields = ['id', 'product', 'product_id', 'quantity', 'size', 'item_total']
 
     def get_item_total(self, obj):
         # Agar discount hai toh wo use karo, warna original price
@@ -34,7 +48,6 @@ class CartItemSerializer(serializers.ModelSerializer):
 
 # Pura Cart (Saare items + Final Total)
 class CartSerializer(serializers.ModelSerializer):
-    # Yahan source='cartitem_set' hata diya kyunki models me related_name='items' hai
     items = CartItemSerializer(many=True, read_only=True)
     cart_total = serializers.SerializerMethodField()
 
@@ -44,7 +57,6 @@ class CartSerializer(serializers.ModelSerializer):
 
     def get_cart_total(self, obj):
         total = 0
-        # Yahan bhi obj.items.all() aayega
         for item in obj.items.all():
             price = item.product.discount_price if item.product.discount_price else item.product.price
             total += (float(price) * item.quantity)

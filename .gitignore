@@ -6,3 +6,12 @@ db.sqlite3
 .env
 media/
 staticfiles/
+# Environment & Secret Files
+.env
+*.env
+frontend/.env
+backend/.env
+rzp-key.csv
+backend/en/
+backend/env/
+node_modules/

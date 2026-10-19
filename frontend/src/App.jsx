@@ -2,14 +2,14 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import Login from './pages/Login';
-import Account from './pages/Account';
+import AccountPage from './components/accountpage/AccountPage';
 import Checkout from './pages/Checkout'; 
 import ProtectedRoute from './components/ProtectedRoute'; 
 import Home from './pages/Home';
 import ProductList from './pages/ProductList';
 import ProductDetail from './pages/ProductDetail';
 import Favourites from './pages/Favourites'; 
-// 1. Naya CartPage import kar
+import Register from './components/Register';
 import CartPage from './components/ui/CartPage'; 
 
 function App() {
@@ -17,8 +17,6 @@ function App() {
     <Router>
       <div className="min-h-screen bg-black flex flex-col">
         <Navbar />
-        
-        {/* 2. Yahan se <CartDrawer /> hata diya hai kyunki ab full page use hoga */}
         
         <div className="flex-grow">
           <Routes>
@@ -28,12 +26,20 @@ function App() {
             <Route path="/products/:department/:category" element={<ProductList />} />
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/account" element={<Account />} />
+            {/* 🔴 REGISTER ROUTE YAHAN ADD KIYA HAI */}
+            <Route path="/register" element={<Register />} /> 
             
-            {/* 3. Naya Cart Route Add Kiya */}
             <Route path="/cart" element={<CartPage />} />
-            
+
             {/* Protected Routes */}
+            <Route 
+              path="/account" 
+              element={
+                <ProtectedRoute>
+                  <AccountPage />
+                </ProtectedRoute>
+              } 
+            />
             <Route 
               path="/checkout" 
               element={
