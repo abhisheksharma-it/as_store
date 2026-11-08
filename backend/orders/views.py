@@ -8,6 +8,7 @@ from rest_framework import status
 from .models import Order, OrderItem, ShippingAddress
 from .serializers import OrderSerializer, ShippingAddressSerializer
 from catalog.models import Product
+from django.db import transaction
 
 # Load backend/.env automatically
 env_path = Path(__file__).resolve().parent.parent / '.env'
@@ -17,76 +18,77 @@ if env_path.exists():
             k, v = line.strip().split('=', 1)
             os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
-RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_TnoNjIwWHgjK1l")
-RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "0nfkaf5QMPRSzSXTfP49H6Zv")
+# ✅ 100% SECURE (Zero secrets in source code):
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+
+FREE_SHIPPING_THRESHOLD = 4999.0  # Matches TopBanner (₹4,999)
+STANDARD_SHIPPING_FEE = 199.0
 
 
 class CheckoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request):
         user = request.user
         address_id = request.data.get('address_id')
         items = request.data.get('items', [])
         payment_method = request.data.get('payment_method', 'ONLINE')
 
-        if not address_id:
+        if not address_id or not items:
             return Response(
-                {"error": "address_id provide karna mandatory hai."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if not items:
-            return Response(
-                {"error": "Aapka cart khali hai!"},
+                {"error": "Shipping address and cart items are required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
             shipping_address = ShippingAddress.objects.get(id=address_id, user=user)
         except ShippingAddress.DoesNotExist:
-            return Response(
-                {"error": "Address exist nahi karta ya aapka nahi hai."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Invalid shipping address."}, status=status.HTTP_404_NOT_FOUND)
 
-        total_amount = 0
+        subtotal = 0.0
         order_items_data = []
 
         for item in items:
+            # Row-level lock on Product to prevent race condition
             try:
-                product = Product.objects.get(id=item['product_id'])
+                product = Product.objects.select_for_update().get(id=item['product_id'])
             except Product.DoesNotExist:
                 return Response(
-                    {"error": f"Product ID {item['product_id']} nahi mila."},
+                    {"error": f"Product ID {item.get('product_id')} not found."},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            quantity = int(item['quantity'])
-            if quantity > product.stock:
+            quantity = int(item.get('quantity', 1))
+            if quantity <= 0 or quantity > product.stock:
                 return Response(
-                    {"error": f"Sorry! '{product.title}' ka sirf {product.stock} stock bacha hai."},
+                    {"error": f"Only {product.stock} left in stock for '{product.title}'."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            price = float(item['price'])
-            total_amount += (price * quantity)
+            # SECURITY FIX: Always use DB price, never trust frontend payload price
+            db_price = float(product.price)
+            subtotal += db_price * quantity
 
+            selected_size = item.get('size') or 'Standard'
             order_items_data.append({
                 'product': product,
                 'quantity': quantity,
-                'price': price,
-                'product_name': product.title
+                'price': db_price,
+                'product_name': f"{product.title} ({selected_size})",
             })
 
-        # 1. Order Create karein
+        shipping_fee = 0.0 if subtotal >= FREE_SHIPPING_THRESHOLD else STANDARD_SHIPPING_FEE
+        total_amount = subtotal + shipping_fee
+
         order = Order.objects.create(
             user=user,
             shipping_address=shipping_address,
-            total_amount=total_amount
+            total_amount=total_amount,
+            status='COD' if payment_method == 'COD' else 'Pending'
         )
 
-        # 2. Order Items Create karein
         for item_data in order_items_data:
             OrderItem.objects.create(
                 order=order,
@@ -95,20 +97,14 @@ class CheckoutAPIView(APIView):
                 price=item_data['price'],
                 quantity=item_data['quantity']
             )
-
-        # 3. COD Logic: Turant stock minus karke status 'COD' mark karein
-        if payment_method == 'COD':
-            order.status = 'COD'
-            order.save()
-            for item_data in order_items_data:
+            if payment_method == 'COD':
                 prod = item_data['product']
                 prod.stock = max(0, prod.stock - item_data['quantity'])
                 prod.save()
 
-        serializer = OrderSerializer(order)
         return Response({
-            "message": "Order placed successfully!",
-            "order": serializer.data
+            "message": "Order created securely!",
+            "order": OrderSerializer(order).data
         }, status=status.HTTP_201_CREATED)
 
 
@@ -158,23 +154,27 @@ class InitiatePaymentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-
 class VerifyPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request):
         razorpay_order_id = request.data.get('razorpay_order_id')
         razorpay_payment_id = request.data.get('razorpay_payment_id')
         razorpay_signature = request.data.get('razorpay_signature')
 
-        if not razorpay_order_id or not razorpay_payment_id or not razorpay_signature:
+        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature]):
             return Response(
                 {"error": "Incomplete payment data."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            order = Order.objects.get(razorpay_order_id=razorpay_order_id, user=request.user)
+            # Row-level lock on Order to prevent duplicate webhook/double-click race condition
+            order = Order.objects.select_for_update().get(
+                razorpay_order_id=razorpay_order_id,
+                user=request.user
+            )
         except Order.DoesNotExist:
             return Response(
                 {"error": "Invalid order reference."},
@@ -183,7 +183,7 @@ class VerifyPaymentView(APIView):
 
         if order.status == 'Paid':
             return Response(
-                {"message": "Order pehle se hi Paid hai!"},
+                {"message": "Order already verified.", "order": OrderSerializer(order).data},
                 status=status.HTTP_200_OK
             )
 
@@ -201,39 +201,109 @@ class VerifyPaymentView(APIView):
             order.status = 'Paid'
             order.save()
 
-            order_items = OrderItem.objects.filter(order=order)
+            order_items = OrderItem.objects.select_related('product').filter(order=order)
             for item in order_items:
-                if item.product:
-                    item.product.stock = max(0, item.product.stock - item.quantity)
-                    item.product.save()
+                if item.product_id:
+                    product = Product.objects.select_for_update().get(id=item.product_id)
+                    product.stock = max(0, product.stock - item.quantity)
+                    product.save()
 
-            serializer = OrderSerializer(order)
             return Response({
-                "message": "Payment verified securely! Order Paid and Stock Updated.",
-                "order": serializer.data
+                "message": "Payment verified securely!",
+                "order": OrderSerializer(order).data
             }, status=status.HTTP_200_OK)
 
         except razorpay.errors.SignatureVerificationError:
             order.status = 'Failed'
             order.save()
             return Response(
-                {"error": "Payment verification failed. Fake signature detected!"},
+                {"error": "Payment signature verification failed."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class RequestReturnView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, order_id):
+        try:
+            # Lock order row so user cannot spam return requests to inflate inventory stock
+            order = Order.objects.select_for_update().get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            return Response(
+                {"error": "Order not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if order.status not in ['Paid', 'COD']:
+            return Response(
+                {"error": "Order is already in return state or ineligible."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'Return Requested'
+        order.save()
+
+        order_items = OrderItem.objects.filter(order=order)
+        for item in order_items:
+            if item.product_id:
+                product = Product.objects.select_for_update().get(id=item.product_id)
+                product.stock += item.quantity
+                product.save()
+
+        return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
+
+
+class RequestReturnView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, order_id):
+        try:
+            # Lock order row so user cannot spam return requests to inflate inventory stock
+            order = Order.objects.select_for_update().get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            return Response(
+                {"error": "Order not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if order.status not in ['Paid', 'COD']:
+            return Response(
+                {"error": "Order is already in return state or ineligible."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'Return Requested'
+        order.save()
+
+        order_items = OrderItem.objects.filter(order=order)
+        for item in order_items:
+            if item.product_id:
+                product = Product.objects.select_for_update().get(id=item.product_id)
+                product.stock += item.quantity
+                product.save()
+
+        return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
 
 
 class OrderListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        orders = Order.objects.filter(
-            user=request.user,
-            status__in=['Paid', 'COD', 'Return Requested', 'Refunded']
-        ).order_by('-created_at')
+        # N+1 Query Fix: Fetches orders, shipping address, and nested items in 2 SQL queries
+        orders = (
+            Order.objects.filter(
+                user=request.user,
+                status__in=['Paid', 'COD', 'Return Requested', 'Refunded']
+            )
+            .select_related('shipping_address')
+            .prefetch_related('items__product')
+            .order_by('-created_at')
+        )
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-
 class OrderDetailView(APIView):
     permission_classes = [IsAuthenticated]
 

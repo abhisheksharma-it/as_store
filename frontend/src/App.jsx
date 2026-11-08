@@ -11,6 +11,8 @@ import ProductDetail from './pages/ProductDetail';
 import Favourites from './pages/Favourites'; 
 import Register from './components/Register';
 import CartPage from './components/ui/CartPage'; 
+import AIStylistDrawer from './components/ai/AIStylistDrawer';
+import NotFound from './pages/NotFound'; // <-- ye line add ki
 
 function App() {
   return (
@@ -26,9 +28,7 @@ function App() {
             <Route path="/products/:department/:category" element={<ProductList />} />
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/login" element={<Login />} />
-            {/* 🔴 REGISTER ROUTE YAHAN ADD KIYA HAI */}
             <Route path="/register" element={<Register />} /> 
-            
             <Route path="/cart" element={<CartPage />} />
 
             {/* Protected Routes */}
@@ -56,10 +56,15 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* 404 Catch-All - Hamesha sabse last me hona chahiye */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
         
         <Footer />
+        {/* SS ke hisab se CartDrawer ke niche mount karna tha */}
+        <AIStylistDrawer />
       </div>
     </Router>
   );

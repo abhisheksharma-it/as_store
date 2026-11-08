@@ -1,8 +1,9 @@
 // src/components/ui/FreeShippingBar.jsx
 import React from 'react';
 import { Truck } from 'lucide-react';
+import { FREE_SHIPPING_THRESHOLD } from '../../utils/constants';
 
-export default function FreeShippingBar({ subtotal = 0, threshold = 1999 }) {
+export default function FreeShippingBar({ subtotal = 0, threshold = FREE_SHIPPING_THRESHOLD }) {
   const remaining = Math.max(0, threshold - subtotal);
   const progress = Math.min(100, Math.round((subtotal / threshold) * 100));
 

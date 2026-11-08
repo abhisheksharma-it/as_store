@@ -1,17 +1,28 @@
+# Python & Django
 venv/
 env/
+backend/en/
+backend/env/
 __pycache__/
-*.pyc
+*.py[cod]
+*.sqlite3
 db.sqlite3
-.env
+backend/*.json
 media/
+backend/media/
 staticfiles/
+
+# Node & React
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
 # Environment & Secret Files
 .env
 *.env
 frontend/.env
 backend/.env
 rzp-key.csv
-backend/en/
-backend/env/
-node_modules/
+.DS_Store
+Thumbs.db

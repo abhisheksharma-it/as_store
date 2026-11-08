@@ -1,38 +1,59 @@
+// src/api.js
 import axios from 'axios';
 import { useAuthStore } from './store/authStore';
 
+const BASE_ORIGIN = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api/',
+  baseURL: `${BASE_ORIGIN}/api/`,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// Yeh function har API call se pehle chalega aur Token inject karega
 api.interceptors.request.use(
   (config) => {
-    // 1. Zustand se token uthao
-    let token = useAuthStore.getState().token;
-    
-    // 🔥 DEBUG: Console me print karke dekho token sach me hai ya ud gaya
-    console.log("👉 Axios Interceptor Bhej Raha Hai Yeh Token:", token);
+    let token = useAuthStore.getState()?.token;
 
-    // 2. Agar Zustand me token null hai, par tu logged in hai, 
-    // toh direct localStorage check karo (Zustand persist aksar isi tarah save karta hai)
     if (!token) {
       try {
         const localAuth = JSON.parse(localStorage.getItem('auth-store') || '{}');
-        token = localAuth?.state?.token || localStorage.getItem('access_token') || localStorage.getItem('token');
-        console.log("👉 Fallback se token nikala:", token);
-      } catch(e) {}
+        token =
+          localAuth?.state?.token ||
+          localStorage.getItem('access') ||
+          localStorage.getItem('access_token') ||
+          localStorage.getItem('token');
+      } catch {
+        token = null;
+      }
     }
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      console.error("🚨 ALERT: Token empty hai! Backend 401 reject karega.");
     }
-    
+
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const authState = useAuthStore.getState();
+      if (typeof authState?.logout === 'function') {
+        authState.logout();
+      } else {
+        useAuthStore.setState({ token: null, user: null, isAuthenticated: false });
+      }
+      localStorage.removeItem('auth-store');
+      localStorage.removeItem('access');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('token');
+    }
+    return Promise.reject(error);
+  }
 );
 
 export default api;

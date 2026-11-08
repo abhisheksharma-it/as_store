@@ -41,9 +41,12 @@ const Home = () => {
           <p className="text-sm font-light tracking-wide opacity-80 mb-6">
             Discover the new season — tailored essentials and statement pieces for every moment.
           </p>
-          <button className="border border-white/40 px-8 py-3 text-xs uppercase tracking-[0.2em] font-light hover:bg-white hover:text-black transition-all duration-300">
+          <Link
+            to="/products"
+            className="inline-block border border-white/40 px-8 py-3 text-xs uppercase tracking-[0.2em] font-light hover:bg-white hover:text-black transition-all duration-300"
+          >
             Shop Now
-          </button>
+          </Link>
         </div>
       </main>
 
@@ -53,7 +56,7 @@ const Home = () => {
       <section className="py-24 px-6 max-w-[1200px] mx-auto text-white">
         <div className="flex justify-between items-end mb-12 border-b border-white/10 pb-6">
           <h2 className="text-2xl font-light tracking-[0.2em] uppercase">New Arrivals</h2>
-          <Link to="/shop" className="text-xs tracking-widest uppercase text-gray-400 hover:text-white transition-colors">
+          <Link to="/products" className="text-xs tracking-widest uppercase text-gray-400 hover:text-white transition-colors">
             View All
           </Link>
         </div>

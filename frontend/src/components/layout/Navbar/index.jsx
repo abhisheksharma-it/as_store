@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import TopBanner from './TopBanner';
 import NavLinks from './NavLinks';
 import NavIcons from './NavIcons';
@@ -37,13 +38,18 @@ const Navbar = () => {
         <div className="flex items-center justify-between px-8 h-16 relative">
           
           <div className="flex items-center gap-12">
-            <a
-              href="#"
-              className="text-white font-bold text-2xl tracking-tight select-none"
-              style={{ fontFamily: 'Arial, sans-serif' }}
+            <Link
+              to="/"
+              onClick={() => setActiveCategory(null)}
+              className="group flex items-baseline select-none text-2xl font-black tracking-[0.12em] text-white transition-opacity hover:opacity-80"
+              style={{ fontFamily: 'Georgia, serif' }}
             >
-              A&amp;S
-            </a>
+              <span>A</span>
+              <span className="mx-0.5 font-serif text-xl italic font-normal text-red-600 transition-transform duration-300 group-hover:scale-110">
+                &amp;
+              </span>
+              <span>S</span>
+            </Link>
 
             <NavLinks 
               activeMenu={activeCategory} 
@@ -61,7 +67,6 @@ const Navbar = () => {
         onMouseEnter={handleDrawerEnter} 
         onMouseLeave={handleMenuLeave}
       >
-        {/* 🔥 YAHAN CHANGE KIYA HAI: onClose prop add kiya */}
         <MegaMenu 
           activeMenu={activeCategory} 
           onClose={() => setActiveCategory(null)} 
