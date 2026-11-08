@@ -2,13 +2,15 @@ import os
 from pathlib import Path
 import razorpay
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from django.db import transaction
+
 from .models import Order, OrderItem, ShippingAddress
 from .serializers import OrderSerializer, ShippingAddressSerializer
 from catalog.models import Product
-from django.db import transaction
 
 # Load backend/.env automatically
 env_path = Path(__file__).resolve().parent.parent / '.env'
@@ -18,11 +20,11 @@ if env_path.exists():
             k, v = line.strip().split('=', 1)
             os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
-# ✅ 100% SECURE (Zero secrets in source code):
+# SECURE: Keys are fetched from environment only
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 
-FREE_SHIPPING_THRESHOLD = 4999.0  # Matches TopBanner (₹4,999)
+FREE_SHIPPING_THRESHOLD = 4999.0
 STANDARD_SHIPPING_FEE = 199.0
 
 
@@ -51,7 +53,7 @@ class CheckoutAPIView(APIView):
         order_items_data = []
 
         for item in items:
-            # Row-level lock on Product to prevent race condition
+            # FIX: Row-level lock on Product to prevent race condition during stock check
             try:
                 product = Product.objects.select_for_update().get(id=item['product_id'])
             except Product.DoesNotExist:
@@ -154,6 +156,7 @@ class InitiatePaymentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
 class VerifyPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -170,7 +173,7 @@ class VerifyPaymentView(APIView):
             )
 
         try:
-            # Row-level lock on Order to prevent duplicate webhook/double-click race condition
+            # FIX: Row-level lock on Order to prevent duplicate webhook/double-click race condition
             order = Order.objects.select_for_update().get(
                 razorpay_order_id=razorpay_order_id,
                 user=request.user
@@ -204,6 +207,7 @@ class VerifyPaymentView(APIView):
             order_items = OrderItem.objects.select_related('product').filter(order=order)
             for item in order_items:
                 if item.product_id:
+                    # FIX: Row-level lock before deducting stock on successful online payment
                     product = Product.objects.select_for_update().get(id=item.product_id)
                     product.stock = max(0, product.stock - item.quantity)
                     product.save()
@@ -222,77 +226,11 @@ class VerifyPaymentView(APIView):
             )
 
 
-class RequestReturnView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @transaction.atomic
-    def post(self, request, order_id):
-        try:
-            # Lock order row so user cannot spam return requests to inflate inventory stock
-            order = Order.objects.select_for_update().get(id=order_id, user=request.user)
-        except Order.DoesNotExist:
-            return Response(
-                {"error": "Order not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        if order.status not in ['Paid', 'COD']:
-            return Response(
-                {"error": "Order is already in return state or ineligible."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        order.status = 'Return Requested'
-        order.save()
-
-        order_items = OrderItem.objects.filter(order=order)
-        for item in order_items:
-            if item.product_id:
-                product = Product.objects.select_for_update().get(id=item.product_id)
-                product.stock += item.quantity
-                product.save()
-
-        return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
-
-
-class RequestReturnView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @transaction.atomic
-    def post(self, request, order_id):
-        try:
-            # Lock order row so user cannot spam return requests to inflate inventory stock
-            order = Order.objects.select_for_update().get(id=order_id, user=request.user)
-        except Order.DoesNotExist:
-            return Response(
-                {"error": "Order not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        if order.status not in ['Paid', 'COD']:
-            return Response(
-                {"error": "Order is already in return state or ineligible."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        order.status = 'Return Requested'
-        order.save()
-
-        order_items = OrderItem.objects.filter(order=order)
-        for item in order_items:
-            if item.product_id:
-                product = Product.objects.select_for_update().get(id=item.product_id)
-                product.stock += item.quantity
-                product.save()
-
-        return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
-
-
 class OrderListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # N+1 Query Fix: Fetches orders, shipping address, and nested items in 2 SQL queries
+        # N+1 Query Fix: Fetches orders, shipping address, and nested items efficiently
         orders = (
             Order.objects.filter(
                 user=request.user,
@@ -304,6 +242,8 @@ class OrderListView(APIView):
         )
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class OrderDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -322,9 +262,11 @@ class OrderDetailView(APIView):
 class RequestReturnView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, order_id):
         try:
-            order = Order.objects.get(id=order_id, user=request.user)
+            # FIX: Lock order row so user cannot spam return requests
+            order = Order.objects.select_for_update().get(id=order_id, user=request.user)
         except Order.DoesNotExist:
             return Response(
                 {"error": "Order not found."},
@@ -343,9 +285,10 @@ class RequestReturnView(APIView):
         # Stock wapas inventory mein add karein
         order_items = OrderItem.objects.filter(order=order)
         for item in order_items:
-            if item.product:
-                item.product.stock += item.quantity
-                item.product.save()
+            if item.product_id:
+                product = Product.objects.select_for_update().get(id=item.product_id)
+                product.stock += item.quantity
+                product.save()
 
         serializer = OrderSerializer(order)
         return Response(serializer.data, status=status.HTTP_200_OK)

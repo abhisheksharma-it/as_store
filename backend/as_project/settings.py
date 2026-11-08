@@ -18,9 +18,12 @@ if env_path.exists():
             os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 # Quick-start development settings - unsuitable for production
-SECRET_KEY = 'django-insecure-%c9fqyn@neaodo&-+7n56p(&(jxosxl@jiao9h#s^-sfb^j@4='
-DEBUG = True
-ALLOWED_HOSTS = ['*']  # Development ke liye
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%c9fqyn@neaodo&-+7n56p(&(jxosxl@jiao9h#s^-sfb^j@4=')
+
+# FIX: Dynamic DEBUG setting. True on local, False in production
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+ALLOWED_HOSTS = ['*']  # Update this in production (e.g., ['your-app.onrender.com'])
 
 # Application definition
 INSTALLED_APPS = [
@@ -135,5 +138,6 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = True 
 CORS_ALLOW_CREDENTIALS = True 
 
-RAZORPAY_KEY_ID = "rzp_test_dummyKeyId123"
-RAZORPAY_KEY_SECRET = "dummyKeySecret12345678"
+# FIX: Removed hardcoded keys. Keys are fetched from environment only for security.
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
