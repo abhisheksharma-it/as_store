@@ -15,16 +15,13 @@ class EcommerceSecurityAndConcurrencyTests(TestCase):
         )
         self.client.force_authenticate(user=self.user)
 
-        # 1. Department banaya
         self.department = Department.objects.create(name="Clothing")
 
-        # 2. Category banayi (department ke saath)
         self.category = Category.objects.create(
             name="Men",
             department=self.department,
         )
 
-        # 3. Product banaya (category aur department dono ke saath)
         self.product = Product.objects.create(
             title="Oversized Wool Coat",
             price=5999.00,
@@ -33,7 +30,6 @@ class EcommerceSecurityAndConcurrencyTests(TestCase):
             department=self.department,
         )
 
-        # 4. ShippingAddress (Automatically matches exact field names in your models.py)
         valid_fields = {
             f.name
             for f in ShippingAddress._meta.get_fields()

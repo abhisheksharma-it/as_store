@@ -29,7 +29,6 @@ const Checkout = () => {
     phone_number: ''
   });
 
-  // 🔴 NAYI STATE: Payment Method ke liye (H&M Style)
   const [paymentMethod, setPaymentMethod] = useState('UPI'); 
 
   useEffect(() => {
@@ -90,12 +89,14 @@ const Checkout = () => {
     setLoading(true);
     setError(null);
 
+    // FIX: Payload explicitly includes 'size' so backend formats product_name properly
     const orderItems = cart.map(item => {
       const actualPrice = item.product?.price || item.price;
       return {
         product_id: item.product?.id || item.product_id || item.id,
         quantity: item.quantity || 1,
-        price: parsePrice(actualPrice) 
+        price: parsePrice(actualPrice),
+        size: item.size || 'Standard' 
       };
     });
 
@@ -115,7 +116,6 @@ const Checkout = () => {
 
       if (!finalAddressId) throw new Error("Please provide a valid delivery address.");
 
-      // Backend ko order create karne ke sath payment method bhi bhej rahe hain
       const orderResponse = await api.post('orders/checkout/', {
         address_id: finalAddressId,
         items: orderItems,
@@ -123,7 +123,6 @@ const Checkout = () => {
       });
       const orderId = orderResponse.data.order.id;
 
-      // 🔴 COD LOGIC: Agar COD hai, toh seedha success
       if (paymentMethod === 'COD') {
         alert("Order Placed Successfully via Cash on Delivery!");
         clearCart();
@@ -131,7 +130,6 @@ const Checkout = () => {
         return; 
       }
 
-      // 🔴 ONLINE PAYMENT LOGIC (Razorpay)
       const initResponse = await api.post('orders/payment/initiate/', {
         order_id: orderId
       });
@@ -139,7 +137,7 @@ const Checkout = () => {
       const mockRazorpayId = initResponse.data.razorpay_order_id;
       
       const options = {
-          key: import.meta.env.VITE_RAZORPAY_KEY_ID, // 🔴 RAZORPAY TEST KEY DAALNA MAT BHOOLNA
+          key: import.meta.env.VITE_RAZORPAY_KEY_ID, 
           amount: initResponse.data.amount, 
           currency: "INR",
           name: "A&S Store",
@@ -193,7 +191,6 @@ const Checkout = () => {
         <div className="w-full lg:w-2/3">
           <form onSubmit={handlePlaceOrder}>
             
-            {/* DELIVERY SECTION */}
             <h2 className="text-sm tracking-widest uppercase mb-8 border-b border-white/10 pb-4">Delivery Options</h2>
             <div className="space-y-4 mb-12">
               {savedAddresses.map((addr) => (
@@ -215,7 +212,6 @@ const Checkout = () => {
               </label>
             </div>
 
-            {/* MANUAL ADDRESS FORM */}
             {(isAddingNew || savedAddresses.length === 0) && (
               <div className="p-6 border border-neutral-700 bg-black/50 space-y-6 mb-12">
                 <div className="grid grid-cols-2 gap-6">
@@ -240,13 +236,10 @@ const Checkout = () => {
               </div>
             )}
 
-            {/* 🔴 NAYA PAYMENT SECTION (H&M STYLE) */}
             <h2 className="text-sm tracking-widest uppercase mb-8 border-b border-white/10 pb-4">Payment</h2>
             <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-6">How would you like to pay?</p>
             
             <div className="space-y-0 border-t border-white/10">
-              
-              {/* UPI Option */}
               <label className="flex items-center justify-between p-6 border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => setPaymentMethod('UPI')}>
                 <div className="flex items-center gap-4">
                   <input type="radio" name="payment_method" checked={paymentMethod === 'UPI'} readOnly className="accent-white" />
@@ -255,7 +248,6 @@ const Checkout = () => {
                 <span className="text-[10px] text-gray-500 uppercase">Supports instant refund</span>
               </label>
 
-              {/* Card Option */}
               <label className="flex items-center justify-between p-6 border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => setPaymentMethod('CARD')}>
                 <div className="flex items-center gap-4">
                   <input type="radio" name="payment_method" checked={paymentMethod === 'CARD'} readOnly className="accent-white" />
@@ -267,7 +259,6 @@ const Checkout = () => {
                 </div>
               </label>
 
-              {/* Netbanking Option */}
               <label className="flex items-center justify-between p-6 border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => setPaymentMethod('NETBANKING')}>
                 <div className="flex items-center gap-4">
                   <input type="radio" name="payment_method" checked={paymentMethod === 'NETBANKING'} readOnly className="accent-white" />
@@ -275,7 +266,6 @@ const Checkout = () => {
                 </div>
               </label>
 
-              {/* COD Option */}
               <label className="flex items-center justify-between p-6 border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => setPaymentMethod('COD')}>
                 <div className="flex items-center gap-4">
                   <input type="radio" name="payment_method" checked={paymentMethod === 'COD'} readOnly className="accent-white" />
@@ -283,7 +273,6 @@ const Checkout = () => {
                 </div>
                 <span className="text-[10px] text-gray-500 uppercase">Pay in cash at time of receiving</span>
               </label>
-
             </div>
 
             <button type="submit" disabled={loading} className="w-full bg-white text-black py-4 text-xs font-bold uppercase tracking-[0.2em] hover:bg-gray-200 transition-colors disabled:bg-white/50 mt-12">
@@ -292,7 +281,6 @@ const Checkout = () => {
           </form>
         </div>
 
-        {/* Right Side: Order Summary */}
         <div className="w-full lg:w-1/3">
           <div className="bg-[#0a0a0a] p-8 border border-white/10 sticky top-32">
             <h2 className="text-sm tracking-widest uppercase mb-6">Order Summary</h2>
@@ -318,12 +306,12 @@ const Checkout = () => {
             
             <div className="border-t border-white/10 pt-6 space-y-3">
                <div className="flex justify-between text-xs text-gray-400 uppercase tracking-widest">
-                  <span>Order Value</span>
-                  <span>₹{cartTotal.toFixed(2)}</span>
+                 <span>Order Value</span>
+                 <span>₹{cartTotal.toFixed(2)}</span>
                </div>
                <div className="flex justify-between text-xs text-gray-400 uppercase tracking-widest">
-                  <span>Delivery Fee</span>
-                  <span className="text-green-400">FREE</span>
+                 <span>Delivery Fee</span>
+                 <span className="text-green-400">FREE</span>
                </div>
             </div>
 
