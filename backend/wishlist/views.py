@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import action # 🔴 Naya Import
-from rest_framework.response import Response # 🔴 Naya Import
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from .models import Wishlist
 from .serializers import WishlistSerializer
 from django.db import IntegrityError
@@ -20,7 +20,6 @@ class WishlistViewSet(viewsets.ModelViewSet):
         except IntegrityError:
             raise ValidationError({"message": "Yeh product pehle se aapki wishlist me hai!"})
 
-    # 🔴 TERA NAYA TOGGLE ENDPOINT YAHAN HAI 🔴
     @action(detail=False, methods=['post'])
     def toggle(self, request):
         product_id = request.data.get('product_id')
@@ -36,6 +35,14 @@ class WishlistViewSet(viewsets.ModelViewSet):
             wishlist_item.delete()
             return Response({"message": "Removed from wishlist", "status": "removed"}, status=status.HTTP_200_OK)
         else:
-            # Agar nahi hai, toh naya bana do (Add to wishlist)
-            Wishlist.objects.create(user=request.user, product_id=product_id)
-            return Response({"message": "Added to wishlist", "status": "added"}, status=status.HTTP_201_CREATED)
+            # FIX: Qwen's recommendation -> Use get_or_create to prevent 500 server error on rapid double-clicks (race conditions)
+            item, created = Wishlist.objects.get_or_create(
+                user=request.user, 
+                product_id=product_id
+            )
+            
+            if created:
+                return Response({"message": "Added to wishlist", "status": "added"}, status=status.HTTP_201_CREATED)
+            else:
+                # Agar race condition ki wajah se already ban gaya tha, tab bhi gracefully handle karo
+                return Response({"message": "Already in wishlist", "status": "added"}, status=status.HTTP_200_OK)

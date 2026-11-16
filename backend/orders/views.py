@@ -50,6 +50,7 @@ class CheckoutAPIView(APIView):
             return Response({"error": "Invalid shipping address."}, status=status.HTTP_404_NOT_FOUND)
 
         subtotal = 0.0
+        total_discount = 0.0  # FIX: Track exact discount for invoice transparency
         order_items_data = []
 
         for item in items:
@@ -69,8 +70,12 @@ class CheckoutAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # SECURITY FIX: Charge discount price if it exists, else regular price
-            db_price = float(product.discount_price) if product.discount_price else float(product.price)
+            # FIX: Calculate exact discount amount
+            original_price = float(product.price)
+            db_price = float(product.discount_price) if product.discount_price else original_price
+            item_discount = (original_price - db_price) * quantity
+            
+            total_discount += item_discount
             subtotal += db_price * quantity
 
             selected_size = item.get('size') or 'Standard'
@@ -88,6 +93,7 @@ class CheckoutAPIView(APIView):
             user=user,
             shipping_address=shipping_address,
             total_amount=total_amount,
+            discount_amount=total_discount, # FIX: Save total discount in DB
             status='COD' if payment_method == 'COD' else 'Pending'
         )
 

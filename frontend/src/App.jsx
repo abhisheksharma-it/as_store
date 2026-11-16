@@ -10,7 +10,6 @@ import ProductList from './pages/ProductList';
 import ProductDetail from './pages/ProductDetail';
 import Favourites from './pages/Favourites'; 
 import Register from './components/Register';
-import CartPage from './components/ui/CartPage'; 
 import AIStylistDrawer from './components/ai/AIStylistDrawer';
 import NotFound from './pages/NotFound'; // <-- ye line add ki
 
@@ -29,7 +28,6 @@ function App() {
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} /> 
-            <Route path="/cart" element={<CartPage />} />
 
             {/* Protected Routes */}
             <Route 

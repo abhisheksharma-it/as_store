@@ -21,7 +21,7 @@ if env_path.exists():
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%c9fqyn@neaodo&-+7n56p(&(jxosxl@jiao9h#s^-sfb^j@4=')
 
 # FIX: Dynamic DEBUG setting. True on local, False in production
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 # FIX: Dynamic ALLOWED_HOSTS for production security
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
