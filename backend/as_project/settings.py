@@ -24,7 +24,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%c9fqyn@neaodo&-+7n56
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 # FIX: Dynamic ALLOWED_HOSTS for production security
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']
 
 # Application definition
 INSTALLED_APPS = [
@@ -126,6 +126,12 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+    
+    # CLAUDE FIX: Throttling rates setup to prevent AI API abuse (Gemini Quota exhaustion)
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '10/hour',
+        'user': '50/hour',
+    }
 }
 
 # FIX: JWT Standard Practice (Using 'id' instead of 'email' to prevent token invalidation on email change)

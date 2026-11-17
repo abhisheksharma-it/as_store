@@ -1,12 +1,20 @@
-// src/components/ui/CartItemRow.jsx
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Trash2, Plus, Minus } from 'lucide-react';
 import { formatImageUrl } from '../../utils/formatImageUrl';
 
+// FIX: Helper to get the correct discounted price
+const getEffectivePrice = (item) => {
+  const productPrice = item.product?.discount_price || item.product?.price;
+  const directPrice = item.discount_price || item.price;
+  return parseFloat(productPrice || directPrice || 0);
+};
+
 export default function CartItemRow({ item, onUpdateQuantity, onRemove }) {
   const prod = item.product || item;
-  const price = Number(prod.price || 0);
+  
+  // FIX: Using effective price for precise calculation
+  const price = getEffectivePrice(item);
   const qty = Number(item.quantity || 1);
   const maxStock = Number(prod.stock ?? 10);
   const isAtMaxStock = qty >= maxStock;

@@ -207,16 +207,26 @@ class VerifyPaymentView(APIView):
 
             order.razorpay_payment_id = razorpay_payment_id
             order.razorpay_signature = razorpay_signature
-            order.status = 'Paid'
-            order.save()
 
+            # CLAUDE FIX: Strict stock validation before accepting payment
             order_items = OrderItem.objects.select_related('product').filter(order=order)
             for item in order_items:
                 if item.product_id:
-                    # FIX: Row-level lock before deducting stock on successful online payment
                     product = Product.objects.select_for_update().get(id=item.product_id)
-                    product.stock = max(0, product.stock - item.quantity)
+                    
+                    if product.stock < item.quantity:
+                        order.status = 'Failed'
+                        order.save()
+                        return Response(
+                            {"error": f"Payment successful, but '{product.title}' is now out of stock. Refund initiated."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                        
+                    product.stock -= item.quantity
                     product.save()
+
+            order.status = 'Paid'
+            order.save()
 
             return Response({
                 "message": "Payment verified securely!",

@@ -1,4 +1,3 @@
-// src/components/ui/CartDrawer.jsx
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { X, Trash2, Plus, Minus } from 'lucide-react';
@@ -6,12 +5,20 @@ import { useCartStore } from '../../store/cartStore';
 import { formatImageUrl } from '../../utils/formatImageUrl';
 import FreeShippingBar from './FreeShippingBar';
 
+// FIX: Helper to get the correct discounted price
+const getEffectivePrice = (item) => {
+  const productPrice = item.product?.discount_price || item.product?.price;
+  const directPrice = item.discount_price || item.price;
+  return parseFloat(productPrice || directPrice || 0);
+};
+
 export default function CartDrawer() {
   const { cart, isCartOpen, closeCart, removeFromCart, updateQuantity } = useCartStore();
 
   const subtotal = cart.reduce((sum, item) => {
-    const prod = item.product || item;
-    return sum + Number(prod.price || 0) * Number(item.quantity || 1);
+    // FIX: Using effective price for accurate drawer subtotal
+    const actualPrice = getEffectivePrice(item);
+    return sum + (actualPrice * Number(item.quantity || 1));
   }, 0);
 
   return (
@@ -55,6 +62,8 @@ export default function CartDrawer() {
                 const qty = Number(item.quantity || 1);
                 const maxStock = Number(prod.stock ?? 10);
                 const isAtMax = qty >= maxStock;
+                // FIX: Get accurate price for individual item rendering
+                const displayPrice = getEffectivePrice(item);
 
                 return (
                   <div key={item.id || index} className="flex gap-4 border-b border-[#1a1a1a] pb-6">
@@ -76,7 +85,7 @@ export default function CartDrawer() {
                           </button>
                         </div>
                         <p className="mt-1 text-xs text-white tracking-wider">
-                          ₹{Number(prod.price || 0).toLocaleString('en-IN')}
+                          ₹{displayPrice.toLocaleString('en-IN')}
                         </p>
                         <p className="mt-1 text-[10px] uppercase tracking-widest text-neutral-500">
                           Size: {item.size || 'Standard'}

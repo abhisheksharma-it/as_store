@@ -8,9 +8,10 @@ from rest_framework.permissions import AllowAny
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from catalog.models import Product
 
-
 class AIStylistView(APIView):
     permission_classes = [AllowAny]
+    
+    # CLAUDE FIX: Explicitly apply rate limits to prevent Gemini API quota abuse
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def post(self, request):
