@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
@@ -24,7 +25,7 @@ class EcommerceSecurityAndConcurrencyTests(TestCase):
 
         self.product = Product.objects.create(
             title="Oversized Wool Coat",
-            price=5999.00,
+            price=Decimal("5999.00"),
             stock=5,
             category=self.category,
             department=self.department,
@@ -73,7 +74,7 @@ class EcommerceSecurityAndConcurrencyTests(TestCase):
         res = self.client.post("/api/orders/checkout/", payload, format="json")
         self.assertEqual(res.status_code, 201)
         order = Order.objects.get(id=res.data["order"]["id"])
-        self.assertEqual(float(order.total_amount), 5999.00)
+        self.assertEqual(Decimal(str(order.total_amount)), Decimal("5999.00"))
 
     def test_stock_deduction_and_idempotent_return_restock(self):
         """Verify COD deducts stock and Return Request restores stock exactly once."""
