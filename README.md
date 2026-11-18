@@ -6,7 +6,7 @@
 
 ## 🛠️ Tech Stack & Architecture
 
-- **Frontend:** React (Vite), Tailwind CSS v4, Zustand (State Management), Lucide Icons, Axios (with JWT Auto-Refresh Interceptor).
+- **Frontend:** React (Vite), Tailwind CSS v4, Zustand (State Management), Lucide Icons, Axios (with JWT Auth & 401 Logout Interceptor).
 - **Backend:** Python, Django, Django REST Framework (DRF), SimpleJWT Authentication.
 - **Database & Concurrency:** PostgreSQL (with atomic row-level locking `select_for_update`).
 - **Payment Gateway:** Razorpay API (HMAC-SHA256 Signature Verification).

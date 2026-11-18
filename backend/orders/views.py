@@ -54,16 +54,31 @@ class CheckoutAPIView(APIView):
         order_items_data = []
 
         for item in items:
+            product_id = item.get('product_id')
+            if not product_id:
+                return Response(
+                    {"error": "Product ID is required for all cart items."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # FIX: Row-level lock on Product to prevent race condition during stock check
             try:
-                product = Product.objects.select_for_update().get(id=item['product_id'])
-            except Product.DoesNotExist:
+                product = Product.objects.select_for_update().get(id=product_id)
+            except (Product.DoesNotExist, ValueError, TypeError):
                 return Response(
-                    {"error": f"Product ID {item.get('product_id')} not found."},
+                    {"error": f"Product ID {product_id} not found."},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            quantity = int(item.get('quantity', 1))
+            # CLAUDE FIX: Safe integer conversion to prevent 500 error on invalid quantity input
+            try:
+                quantity = int(item.get('quantity', 1))
+            except (ValueError, TypeError):
+                return Response(
+                    {"error": "Invalid quantity format."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             if quantity <= 0 or quantity > product.stock:
                 return Response(
                     {"error": f"Only {product.stock} left in stock for '{product.title}'."},
@@ -74,7 +89,7 @@ class CheckoutAPIView(APIView):
             original_price = float(product.price)
             db_price = float(product.discount_price) if product.discount_price else original_price
             item_discount = (original_price - db_price) * quantity
-            
+
             total_discount += item_discount
             subtotal += db_price * quantity
 
@@ -93,7 +108,7 @@ class CheckoutAPIView(APIView):
             user=user,
             shipping_address=shipping_address,
             total_amount=total_amount,
-            discount_amount=total_discount, # FIX: Save total discount in DB
+            discount_amount=total_discount,  # FIX: Save total discount in DB
             status='COD' if payment_method == 'COD' else 'Pending'
         )
 
@@ -135,8 +150,24 @@ class InitiatePaymentView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        if order.status == 'Paid':
+            return Response(
+                {"error": "Order is already paid."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount_in_paise = int(round(order.total_amount * 100))
+
+        # CLAUDE FIX: Reuse existing Razorpay order ID if already created for this Pending order
+        if order.razorpay_order_id:
+            return Response({
+                "message": "Payment initiated securely",
+                "razorpay_order_id": order.razorpay_order_id,
+                "amount": amount_in_paise,
+                "currency": "INR"
+            }, status=status.HTTP_200_OK)
+
         client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-        amount_in_paise = int(order.total_amount * 100)
 
         data = {
             "amount": amount_in_paise,
@@ -208,12 +239,13 @@ class VerifyPaymentView(APIView):
             order.razorpay_payment_id = razorpay_payment_id
             order.razorpay_signature = razorpay_signature
 
-            # CLAUDE FIX: Strict stock validation before accepting payment
-            order_items = OrderItem.objects.select_related('product').filter(order=order)
+            # CLAUDE FIX: Two-pass lock & check so partial stock is never deducted if an item fails
+            order_items = list(OrderItem.objects.select_related('product').filter(order=order))
+            locked_products = []
+
             for item in order_items:
                 if item.product_id:
                     product = Product.objects.select_for_update().get(id=item.product_id)
-                    
                     if product.stock < item.quantity:
                         order.status = 'Failed'
                         order.save()
@@ -221,9 +253,11 @@ class VerifyPaymentView(APIView):
                             {"error": f"Payment successful, but '{product.title}' is now out of stock. Refund initiated."},
                             status=status.HTTP_400_BAD_REQUEST
                         )
-                        
-                    product.stock -= item.quantity
-                    product.save()
+                    locked_products.append((product, item.quantity))
+
+            for product, qty in locked_products:
+                product.stock -= qty
+                product.save()
 
             order.status = 'Paid'
             order.save()

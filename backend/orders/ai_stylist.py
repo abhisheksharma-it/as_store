@@ -8,10 +8,11 @@ from rest_framework.permissions import AllowAny
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from catalog.models import Product
 
+MAX_IMAGE_BASE64_LENGTH = 7_000_000  # ~5MB image size limit
+
+
 class AIStylistView(APIView):
     permission_classes = [AllowAny]
-    
-    # CLAUDE FIX: Explicitly apply rate limits to prevent Gemini API quota abuse
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def post(self, request):
@@ -21,6 +22,10 @@ class AIStylistView(APIView):
 
         if not prompt and not image_base64:
             return Response({"error": "Prompt or outfit image is required."}, status=400)
+
+        # CLAUDE FIX: Prevent oversized image payloads from exhausting memory/bandwidth
+        if image_base64 and len(image_base64) > MAX_IMAGE_BASE64_LENGTH:
+            return Response({"error": "Uploaded image is too large (max 5MB)."}, status=400)
 
         products = Product.objects.filter(stock__gt=0)[:30]
         catalog = [
@@ -54,10 +59,14 @@ class AIStylistView(APIView):
                     "contents": [{"parts": parts}],
                     "generationConfig": {"responseMimeType": "application/json"},
                 }
+                # CLAUDE FIX: Pass API key in x-goog-api-key header instead of URL query parameter
                 req = urllib.request.Request(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}",
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
                     data=json.dumps(payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": api_key,
+                    },
                 )
                 with urllib.request.urlopen(req, timeout=12) as res:
                     result = json.loads(res.read().decode("utf-8"))
