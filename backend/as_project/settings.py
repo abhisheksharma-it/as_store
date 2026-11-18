@@ -7,7 +7,7 @@ from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load backend/.env automatically
+# Load backend/.env automatically if present
 env_path = BASE_DIR / '.env'
 if env_path.exists():
     for line in env_path.read_text().splitlines():
@@ -15,10 +15,8 @@ if env_path.exists():
             k, v = line.strip().split('=', 1)
             os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
-# Dynamic DEBUG setting: True on local (.env), False in production by default
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-# Strict SECRET_KEY check in production, fallback only in local DEBUG mode
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
     if DEBUG:
@@ -26,7 +24,6 @@ if not SECRET_KEY:
     else:
         raise ValueError("SECRET_KEY environment variable is required in production!")
 
-# Render & Local Allowed Hosts
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,.onrender.com').split(',')
@@ -59,7 +56,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # RENDER FIX: Serves static files in production
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -87,7 +84,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'as_project.wsgi.application'
 
-# Database - Production PostgreSQL with SQLite fallback for local/CI
 if os.environ.get('DB_ENGINE') == 'django.db.backends.postgresql':
     DATABASES = {
         'default': {
@@ -119,10 +115,18 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# RENDER FIX: Static & Media files configuration
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+os.makedirs(STATIC_ROOT, exist_ok=True)
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -149,7 +153,6 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# RENDER FIX: Production-safe CORS configuration
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
 

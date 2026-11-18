@@ -1,8 +1,8 @@
 import os
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import razorpay
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
@@ -12,7 +12,6 @@ from .models import Order, OrderItem, ShippingAddress
 from .serializers import OrderSerializer, ShippingAddressSerializer
 from catalog.models import Product
 
-# Load backend/.env automatically
 env_path = Path(__file__).resolve().parent.parent / '.env'
 if env_path.exists():
     for line in env_path.read_text().splitlines():
@@ -20,12 +19,11 @@ if env_path.exists():
             k, v = line.strip().split('=', 1)
             os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
-# SECURE: Keys are fetched from environment only
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 
-FREE_SHIPPING_THRESHOLD = 4999.0
-STANDARD_SHIPPING_FEE = 199.0
+FREE_SHIPPING_THRESHOLD = Decimal("4999.00")
+STANDARD_SHIPPING_FEE = Decimal("199.00")
 
 
 class CheckoutAPIView(APIView):
@@ -49,8 +47,8 @@ class CheckoutAPIView(APIView):
         except ShippingAddress.DoesNotExist:
             return Response({"error": "Invalid shipping address."}, status=status.HTTP_404_NOT_FOUND)
 
-        subtotal = 0.0
-        total_discount = 0.0  # FIX: Track exact discount for invoice transparency
+        subtotal = Decimal("0.00")
+        total_discount = Decimal("0.00")
         order_items_data = []
 
         for item in items:
@@ -61,7 +59,6 @@ class CheckoutAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # FIX: Row-level lock on Product to prevent race condition during stock check
             try:
                 product = Product.objects.select_for_update().get(id=product_id)
             except (Product.DoesNotExist, ValueError, TypeError):
@@ -70,7 +67,6 @@ class CheckoutAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # CLAUDE FIX: Safe integer conversion to prevent 500 error on invalid quantity input
             try:
                 quantity = int(item.get('quantity', 1))
             except (ValueError, TypeError):
@@ -85,9 +81,8 @@ class CheckoutAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # FIX: Calculate exact discount amount
-            original_price = float(product.price)
-            db_price = float(product.discount_price) if product.discount_price else original_price
+            original_price = Decimal(str(product.price))
+            db_price = Decimal(str(product.discount_price)) if product.discount_price else original_price
             item_discount = (original_price - db_price) * quantity
 
             total_discount += item_discount
@@ -101,14 +96,14 @@ class CheckoutAPIView(APIView):
                 'product_name': f"{product.title} ({selected_size})",
             })
 
-        shipping_fee = 0.0 if subtotal >= FREE_SHIPPING_THRESHOLD else STANDARD_SHIPPING_FEE
+        shipping_fee = Decimal("0.00") if subtotal >= FREE_SHIPPING_THRESHOLD else STANDARD_SHIPPING_FEE
         total_amount = subtotal + shipping_fee
 
         order = Order.objects.create(
             user=user,
             shipping_address=shipping_address,
             total_amount=total_amount,
-            discount_amount=total_discount,  # FIX: Save total discount in DB
+            discount_amount=total_discount,
             status='COD' if payment_method == 'COD' else 'Pending'
         )
 
@@ -156,9 +151,9 @@ class InitiatePaymentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        amount_in_paise = int(round(order.total_amount * 100))
+        total_decimal = Decimal(str(order.total_amount))
+        amount_in_paise = int((total_decimal * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
-        # CLAUDE FIX: Reuse existing Razorpay order ID if already created for this Pending order
         if order.razorpay_order_id:
             return Response({
                 "message": "Payment initiated securely",
@@ -210,7 +205,6 @@ class VerifyPaymentView(APIView):
             )
 
         try:
-            # FIX: Row-level lock on Order to prevent duplicate webhook/double-click race condition
             order = Order.objects.select_for_update().get(
                 razorpay_order_id=razorpay_order_id,
                 user=request.user
@@ -239,7 +233,6 @@ class VerifyPaymentView(APIView):
             order.razorpay_payment_id = razorpay_payment_id
             order.razorpay_signature = razorpay_signature
 
-            # CLAUDE FIX: Two-pass lock & check so partial stock is never deducted if an item fails
             order_items = list(OrderItem.objects.select_related('product').filter(order=order))
             locked_products = []
 
@@ -247,10 +240,22 @@ class VerifyPaymentView(APIView):
                 if item.product_id:
                     product = Product.objects.select_for_update().get(id=item.product_id)
                     if product.stock < item.quantity:
-                        order.status = 'Failed'
+                        total_decimal = Decimal(str(order.total_amount))
+                        amount_in_paise = int(
+                            (total_decimal * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                        )
+                        try:
+                            client.payment.refund(razorpay_payment_id, {"amount": amount_in_paise})
+                            order.status = 'Refunded'
+                            resolution_msg = "An automatic refund has been initiated via Razorpay."
+                        except Exception:
+                            order.status = 'Failed'
+                            resolution_msg = (
+                                f"Please contact support with Payment ID {razorpay_payment_id} for a manual refund."
+                            )
                         order.save()
                         return Response(
-                            {"error": f"Payment successful, but '{product.title}' is now out of stock. Refund initiated."},
+                            {"error": f"Payment captured, but '{product.title}' is now out of stock. {resolution_msg}"},
                             status=status.HTTP_400_BAD_REQUEST
                         )
                     locked_products.append((product, item.quantity))
@@ -280,7 +285,6 @@ class OrderListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # N+1 Query Fix: Fetches orders, shipping address, and nested items efficiently
         orders = (
             Order.objects.filter(
                 user=request.user,
@@ -315,7 +319,6 @@ class RequestReturnView(APIView):
     @transaction.atomic
     def post(self, request, order_id):
         try:
-            # FIX: Lock order row so user cannot spam return requests
             order = Order.objects.select_for_update().get(id=order_id, user=request.user)
         except Order.DoesNotExist:
             return Response(
@@ -332,7 +335,6 @@ class RequestReturnView(APIView):
         order.status = 'Return Requested'
         order.save()
 
-        # Stock wapas inventory mein add karein
         order_items = OrderItem.objects.filter(order=order)
         for item in order_items:
             if item.product_id:

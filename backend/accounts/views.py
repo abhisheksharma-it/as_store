@@ -10,7 +10,6 @@ User = get_user_model()
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
-    # CLAUDE FIX: Prevent automated bot/spam account registrations
     throttle_classes = [AnonRateThrottle]
     serializer_class = RegisterSerializer
 

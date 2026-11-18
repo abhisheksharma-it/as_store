@@ -1,4 +1,3 @@
-# backend/orders/ai_stylist.py
 import os
 import json
 import urllib.request
@@ -23,7 +22,6 @@ class AIStylistView(APIView):
         if not prompt and not image_base64:
             return Response({"error": "Prompt or outfit image is required."}, status=400)
 
-        # CLAUDE FIX: Prevent oversized image payloads from exhausting memory/bandwidth
         if image_base64 and len(image_base64) > MAX_IMAGE_BASE64_LENGTH:
             return Response({"error": "Uploaded image is too large (max 5MB)."}, status=400)
 
@@ -59,7 +57,6 @@ class AIStylistView(APIView):
                     "contents": [{"parts": parts}],
                     "generationConfig": {"responseMimeType": "application/json"},
                 }
-                # CLAUDE FIX: Pass API key in x-goog-api-key header instead of URL query parameter
                 req = urllib.request.Request(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
                     data=json.dumps(payload).encode("utf-8"),

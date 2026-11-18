@@ -23,14 +23,12 @@ class CartAPIView(APIView):
         serializer = CartSerializer(cart)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    # POST: Cart me item add karne ke liye
     @transaction.atomic
     def post(self, request):
         product_id = request.data.get('product_id')
         if not product_id:
             return Response({"error": "Product ID zaroori hai!"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # CLAUDE FIX: Safe integer conversion to prevent 500 crash on invalid input
         try:
             quantity = int(request.data.get('quantity', 1))
         except (ValueError, TypeError):
@@ -92,14 +90,12 @@ class CartItemDetailView(APIView):
             return None
         return Cart.objects.filter(id=cart_id).first()
 
-    # PUT: Quantity update karne ke liye
     @transaction.atomic
     def put(self, request, product_id):
         cart = self._get_cart(request)
         if not cart:
             return Response({"error": "Cart nahi mila!"}, status=status.HTTP_404_NOT_FOUND)
 
-        # CLAUDE FIX: Safe integer conversion to prevent 500 error
         try:
             new_quantity = int(request.data.get('quantity', 1))
         except (ValueError, TypeError):
@@ -129,7 +125,6 @@ class CartItemDetailView(APIView):
             cart_item.save()
             return Response({"message": "Quantity update ho gayi!"}, status=status.HTTP_200_OK)
 
-    # DELETE: Item ko cart se hatane ke liye
     @transaction.atomic
     def delete(self, request, product_id):
         cart = self._get_cart(request)
@@ -164,7 +159,9 @@ class MergeCartAPIView(APIView):
 
             if guest_cart.id != user_cart.id:
                 for item in guest_cart.items.select_related('product').all():
-                    # CLAUDE FIX: Match both product AND size when merging guest cart into user cart
+                    if item.product.stock <= 0:
+                        continue
+
                     existing_item = CartItem.objects.filter(
                         cart=user_cart,
                         product=item.product,
