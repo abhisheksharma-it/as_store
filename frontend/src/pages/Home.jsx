@@ -9,8 +9,8 @@ const getProductImage = (product) => {
   const raw = product?.image_url || product?.image || product?.gallery_images?.[0]?.image;
   if (!raw) return PLACEHOLDER;
   if (raw.startsWith('http')) return raw;
-  if (raw.startsWith('/')) return `http://127.0.0.1:8000${raw}`;
-  return `http://127.0.0.1:8000/media/${raw}`;
+  if (raw.startsWith('/')) return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}${raw}`;
+  return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/media/${raw}`;
 };
 
 const Home = () => {

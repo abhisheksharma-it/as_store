@@ -14,7 +14,7 @@ export function useDepartments() {
       setError(null);
       try {
         const response = await axios.get(
-          'http://127.0.0.1:8000/api/catalog/departments/',
+          (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000') + '/api/catalog/departments/',
           { signal: controller.signal }
         );
         setDepartments(response.data);

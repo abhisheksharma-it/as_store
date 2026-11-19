@@ -29,7 +29,7 @@ export default function SearchDrawer({ isOpen, onClose }) {
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
-        const res = await axios.get('http://127.0.0.1:8000/api/catalog/search/', {
+        const res = await axios.get((import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000') + '/api/catalog/search/', {
           params: { q: query, search: query },
         });
         const rawData = res.data.results || res.data.products || res.data || [];

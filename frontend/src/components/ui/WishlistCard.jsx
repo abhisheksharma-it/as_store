@@ -12,8 +12,8 @@ const formatImageUrl = (rawImage) => {
   const imgStr = typeof rawImage === 'string' ? rawImage : (rawImage.image_url || rawImage.image || "");
   if (!imgStr || !imgStr.trim()) return PLACEHOLDER;
   if (imgStr.startsWith('http')) return imgStr;
-  if (imgStr.startsWith('/')) return `http://127.0.0.1:8000${imgStr}`;
-  return `http://127.0.0.1:8000/media/${imgStr}`;
+  if (imgStr.startsWith('/')) return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}${imgStr}`;
+  return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/media/${imgStr}`;
 };
 
 export default function WishlistCard({ item, isFavourited, onToggle }) {

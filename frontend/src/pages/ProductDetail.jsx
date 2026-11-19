@@ -30,7 +30,7 @@ export default function ProductDetail() {
         setLoading(true);
         setError(null);
         const { data } = await axios.get(
-          `http://127.0.0.1:8000/api/catalog/product/${id}/`
+          `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/api/catalog/product/${id}/`
         );
         setProduct(data.product || data);
       } catch (err) {
@@ -47,8 +47,8 @@ export default function ProductDetail() {
     const imgStr = typeof rawImage === "string" ? rawImage : rawImage.image;
     if (!imgStr) return PLACEHOLDER;
     if (imgStr.startsWith("http")) return imgStr;
-    if (imgStr.startsWith("/")) return `http://127.0.0.1:8000${imgStr}`;
-    return `http://127.0.0.1:8000/media/${imgStr}`;
+    if (imgStr.startsWith("/")) return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}${imgStr}`;
+    return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/media/${imgStr}`;
   };
 
   const displayImages = useMemo(() => {

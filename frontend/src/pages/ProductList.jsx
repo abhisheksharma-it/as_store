@@ -23,7 +23,7 @@ export default function ProductList() {
         if (department) params.department = department;
         if (category) params.category = category;
 
-        const response = await axios.get('http://127.0.0.1:8000/api/catalog/search/', { params });
+        const response = await axios.get((import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000') + '/api/catalog/search/', { params });
         const data = response.data.results || response.data.products || response.data;
         setProducts(Array.isArray(data) ? data : []);
         setError(null);

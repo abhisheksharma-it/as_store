@@ -20,7 +20,7 @@ export default function Favourites() {
 
     const loadPopular = async () => {
       try {
-        const res = await axios.get('http://127.0.0.1:8000/api/catalog/search/');
+        const res = await axios.get((import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000') + '/api/catalog/search/');
         const data = res.data.results || res.data.products || res.data || [];
         if (Array.isArray(data)) setPopularProducts(data.slice(0, 4));
       } catch (err) {

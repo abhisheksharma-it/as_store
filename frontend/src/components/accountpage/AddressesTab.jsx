@@ -28,7 +28,7 @@ export default function AddressesTab() {
 
   const fetchAddresses = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/orders/address/', { headers });
+      const res = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000') + '/api/orders/address/', { headers });
       if (res.ok) {
         const data = await res.json();
         setAddresses(Array.isArray(data) ? data : (data.results || []));
@@ -73,8 +73,8 @@ export default function AddressesTab() {
     
     try {
       const url = editingAddress 
-        ? `http://127.0.0.1:8000/api/orders/address/${editingAddress.id}/` 
-        : 'http://127.0.0.1:8000/api/orders/address/';
+        ? `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/api/orders/address/${editingAddress.id}/` 
+        : (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000') + '/api/orders/address/';
       
       const method = editingAddress ? 'PUT' : 'POST';
 
@@ -129,7 +129,7 @@ export default function AddressesTab() {
 
     setIsLoading(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/orders/address/${id}/`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/api/orders/address/${id}/`, {
         method: 'DELETE',
         headers
       });
