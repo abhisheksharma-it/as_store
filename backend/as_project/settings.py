@@ -87,14 +87,16 @@ TEMPLATES = [
 WSGI_APPLICATION = 'as_project.wsgi.application'
 
 if os.environ.get('DB_ENGINE') == 'django.db.backends.postgresql':
+    db_host = os.environ.get('DB_HOST', '127.0.0.1')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.environ.get('DB_NAME', 'as_ecommerce_db'),
             'USER': os.environ.get('DB_USER', 'postgres'),
             'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'HOST': db_host,
             'PORT': os.environ.get('DB_PORT', '5432'),
+            'OPTIONS': {'sslmode': 'require'} if db_host not in ('127.0.0.1', 'localhost') else {},
         }
     }
 else:
@@ -182,7 +184,7 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
-CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+CSRF_TRUSTED_ORIGINS = list(set(CORS_ALLOWED_ORIGINS + ['https://*.onrender.com']))
 
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
