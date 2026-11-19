@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../utils/mediaUrl';
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
@@ -9,8 +10,8 @@ const getProductImage = (product) => {
   const raw = product?.image_url || product?.image || product?.gallery_images?.[0]?.image;
   if (!raw) return PLACEHOLDER;
   if (raw.startsWith('http')) return raw;
-  if (raw.startsWith('/')) return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}${raw}`;
-  return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/media/${raw}`;
+  if (raw.startsWith('/')) return resolveMediaUrl(raw);
+  return resolveMediaUrl(raw);
 };
 
 const Home = () => {

@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../../utils/mediaUrl';
 // src/components/ui/WishlistCard.jsx
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -12,8 +13,8 @@ const formatImageUrl = (rawImage) => {
   const imgStr = typeof rawImage === 'string' ? rawImage : (rawImage.image_url || rawImage.image || "");
   if (!imgStr || !imgStr.trim()) return PLACEHOLDER;
   if (imgStr.startsWith('http')) return imgStr;
-  if (imgStr.startsWith('/')) return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}${imgStr}`;
-  return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/media/${imgStr}`;
+  if (imgStr.startsWith('/')) return resolveMediaUrl(imgStr);
+  return resolveMediaUrl(imgStr);
 };
 
 export default function WishlistCard({ item, isFavourited, onToggle }) {
