@@ -9,6 +9,8 @@ export const formatImageUrl = (productOrUrl) => {
 
   if (!raw) return '';
   if (raw.startsWith('http')) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('//')) return `https:${raw}`;
   if (raw.startsWith('/')) return `${API_BASE_URL}${raw}`;
   return `${API_BASE_URL}/media/${raw}`;
 };
