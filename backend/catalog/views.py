@@ -1,3 +1,4 @@
+from as_project.media_utils import resolve_media_url
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
@@ -65,12 +66,10 @@ def category_products_api(request, category_id):
     for p in products:
         image_url = None
         if hasattr(p, 'image') and p.image:
-             request_url = request.build_absolute_uri('/')[:-1]
-             image_url = f"{request_url}{p.image.url}"
+             image_url = resolve_media_url(request, p.image.url)
         elif hasattr(p, 'images') and p.images.exists():
              first_image = p.images.first()
-             request_url = request.build_absolute_uri('/')[:-1]
-             image_url = f"{request_url}{first_image.image.url}"
+             image_url = resolve_media_url(request, first_image.image.url)
              
         product_list.append({
             'id': p.id,
@@ -126,13 +125,11 @@ def latest_products_api(request):
         image_url = None
         
         if hasattr(p, 'image') and p.image:
-             request_url = request.build_absolute_uri('/')[:-1]
-             image_url = f"{request_url}{p.image.url}"
+             image_url = resolve_media_url(request, p.image.url)
              
         elif hasattr(p, 'images') and p.images.exists():
              first_image = p.images.first()
-             request_url = request.build_absolute_uri('/')[:-1]
-             image_url = f"{request_url}{first_image.image.url}"
+             image_url = resolve_media_url(request, first_image.image.url)
              
         product_list.append({
             'id': p.id,

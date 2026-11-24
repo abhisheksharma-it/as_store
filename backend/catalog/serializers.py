@@ -1,3 +1,4 @@
+from as_project.media_utils import resolve_media_url
 from rest_framework import serializers
 from .models import Department, Category, Product, ProductImage
 
@@ -54,7 +55,7 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         request = self.context.get('request')
         if hasattr(obj, 'image') and obj.image:
-            return request.build_absolute_uri(obj.image.url) if request else f"http://127.0.0.1:8000{obj.image.url}"
+            return resolve_media_url(request, obj.image.url)
         return None
 
     def get_gallery_images(self, obj):

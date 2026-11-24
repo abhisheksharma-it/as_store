@@ -1,3 +1,4 @@
+from as_project.media_utils import resolve_media_url
 from rest_framework import serializers
 from .models import Order, OrderItem, ShippingAddress
 from catalog.models import Product  # 🔴 Zaroori: Product image laane ke liye import kiya
@@ -27,7 +28,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
             # product_name ka use karke Product model se image dhoondhne ki koshish
             product = Product.objects.filter(title=obj.product_name).first()
             if product and product.image:
-                return request.build_absolute_uri(product.image.url) if request else f"http://127.0.0.1:8000{product.image.url}"
+                return resolve_media_url(request, product.image.url)
         except Exception:
             pass
         

@@ -1,3 +1,4 @@
+from as_project.media_utils import resolve_media_url
 from rest_framework import serializers
 from .models import Wishlist
 
@@ -28,7 +29,7 @@ class WishlistSerializer(serializers.ModelSerializer):
         
         # 1. ProductSerializer ka original logic
         if hasattr(product, 'image') and product.image:
-            return request.build_absolute_uri(product.image.url) if request else f"http://127.0.0.1:8000{product.image.url}"
+            return resolve_media_url(request, product.image.url)
             
         # 2. Check direct string image_url (fallback)
         if getattr(product, 'image_url', None):
