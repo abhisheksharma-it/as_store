@@ -1,13 +1,23 @@
-// src/components/accountpage/PurchasesTab.jsx
 import React, { useState } from 'react';
 import { ChevronDown, Package, CreditCard, RotateCcw } from 'lucide-react';
+import PurchaseItemRow from './PurchaseItemRow';
+
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+).replace(/\/+$/, '');
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   return isNaN(date)
     ? dateStr
-    : date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+    : date
+        .toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })
+        .toUpperCase();
 };
 
 const getStatusStyle = (status = '') => {
@@ -20,7 +30,12 @@ const getStatusStyle = (status = '') => {
   return 'text-gray-400 border-white/20 bg-white/5';
 };
 
-export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, onSelectTab }) {
+export default function PurchasesTab({
+  orders = [],
+  isLoading,
+  onOrderUpdate,
+  onSelectTab,
+}) {
   const [expandedId, setExpandedId] = useState(null);
   const [returningId, setReturningId] = useState(null);
 
@@ -30,7 +45,7 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
     const token = localStorage.getItem('access') || localStorage.getItem('token');
     setReturningId(orderId);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/api/orders/return/${orderId}/`, {
+      const res = await fetch(`${API_BASE_URL}/api/orders/return/${orderId}/`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -41,7 +56,9 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
 
       if (res.ok && onOrderUpdate) {
         const updatedOrder = await res.json();
-        onOrderUpdate((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
+        onOrderUpdate((prev) =>
+          prev.map((o) => (o.id === orderId ? updatedOrder : o))
+        );
       }
     } catch (err) {
       console.error('Return error:', err);
@@ -51,7 +68,11 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
   };
 
   if (isLoading) {
-    return <div className="text-xs tracking-[0.2em] text-gray-500 uppercase py-10">Loading your orders...</div>;
+    return (
+      <div className="text-xs tracking-[0.2em] text-gray-500 uppercase py-10">
+        Loading your orders...
+      </div>
+    );
   }
 
   if (!orders || orders.length === 0) {
@@ -64,7 +85,9 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
 
   return (
     <div className="animate-fadeIn">
-      <h1 className="mb-10 text-xl font-light tracking-[0.2em] uppercase text-white">My Purchases</h1>
+      <h1 className="mb-10 text-xl font-light tracking-[0.2em] uppercase text-white">
+        My Purchases
+      </h1>
 
       <div className="border border-[#222] bg-[#0a0a0a] overflow-x-auto">
         <table className="w-full text-left text-xs tracking-widest text-white">
@@ -83,18 +106,28 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
               const isOpen = expandedId === order.id;
               const items = order.items || order.order_items || [];
               const statusLabel = order.status || 'PAID';
-              const isEligibleForReturn = ['PAID', 'COD'].includes(statusLabel.toUpperCase());
+              const isEligibleForReturn = ['PAID', 'COD'].includes(
+                statusLabel.toUpperCase()
+              );
 
               return (
                 <React.Fragment key={order.id}>
                   <tr
                     onClick={() => toggle(order.id)}
-                    className={`hover:bg-[#141414] transition-colors cursor-pointer ${isOpen ? 'bg-[#141414]' : ''}`}
+                    className={`hover:bg-[#141414] transition-colors cursor-pointer ${
+                      isOpen ? 'bg-[#141414]' : ''
+                    }`}
                   >
                     <td className="py-6 px-6 font-medium">#{order.id}</td>
-                    <td className="py-6 px-6 text-gray-400">{formatDate(order.date || order.created_at)}</td>
+                    <td className="py-6 px-6 text-gray-400">
+                      {formatDate(order.date || order.created_at)}
+                    </td>
                     <td className="py-6 px-6">
-                      <span className={`px-2.5 py-1 text-[10px] border uppercase tracking-widest ${getStatusStyle(statusLabel)}`}>
+                      <span
+                        className={`px-2.5 py-1 text-[10px] border uppercase tracking-widest ${getStatusStyle(
+                          statusLabel
+                        )}`}
+                      >
                         {statusLabel === 'COD' ? 'CASH ON DELIVERY' : statusLabel}
                       </span>
                     </td>
@@ -102,7 +135,12 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
                       ₹{Number(order.total_amount || 0).toLocaleString('en-IN')}
                     </td>
                     <td className="py-6 px-4 text-right text-gray-500">
-                      <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180 text-white' : ''}`} />
+                      <ChevronDown
+                        size={16}
+                        className={`transition-transform duration-200 ${
+                          isOpen ? 'rotate-180 text-white' : ''
+                        }`}
+                      />
                     </td>
                   </tr>
 
@@ -115,7 +153,10 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
                           </div>
                           {order.razorpay_payment_id && (
                             <div className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                              <CreditCard size={13} /> Payment Ref: <span className="text-gray-300">{order.razorpay_payment_id}</span>
+                              <CreditCard size={13} /> Payment Ref:{' '}
+                              <span className="text-gray-300">
+                                {order.razorpay_payment_id}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -123,33 +164,15 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
                         <div className="space-y-4">
                           {items.length > 0 ? (
                             items.map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-6 border border-[#222] bg-black/40 p-4">
-                                <img
-                                  src={item.image}
-                                  alt={item.name || item.product_name}
-                                  className="w-16 h-20 object-cover bg-neutral-900"
-                                />
-                                <div className="flex-grow">
-                                  <p className="text-xs md:text-sm font-light tracking-widest uppercase text-white">
-                                    {item.name || item.product_name}
-                                  </p>
-                                  <p className="text-[10px] text-gray-500 uppercase mt-1.5 tracking-widest">
-                                    Size: {item.size || 'Standard'} &nbsp;|&nbsp; Qty: {item.quantity}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-xs md:text-sm tracking-wider">
-                                    ₹{Number(item.price || 0).toLocaleString('en-IN')}
-                                  </p>
-                                </div>
-                              </div>
+                              <PurchaseItemRow key={item.id || idx} item={item} />
                             ))
                           ) : (
-                            <p className="text-xs text-gray-500">No item details available.</p>
+                            <p className="text-xs text-gray-500">
+                              No item details available.
+                            </p>
                           )}
                         </div>
 
-                        {/* RETURN ACTION FOOTER INSIDE MY PURCHASES */}
                         <div className="mt-6 pt-4 border-t border-[#222] flex items-center justify-between">
                           {isEligibleForReturn ? (
                             <>
@@ -160,10 +183,12 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
                                 type="button"
                                 onClick={() => handleDirectReturn(order.id)}
                                 disabled={returningId === order.id}
-                                className="border border-white/40 bg-transparent px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-white hover:text-black transition-colors flex items-center gap-2"
+                                className="border border-white/40 bg-transparent px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-white hover:text-black transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
                               >
                                 <RotateCcw size={12} />
-                                {returningId === order.id ? 'Processing...' : 'Return This Order'}
+                                {returningId === order.id
+                                  ? 'Processing...'
+                                  : 'Return This Order'}
                               </button>
                             </>
                           ) : (
@@ -175,7 +200,7 @@ export default function PurchasesTab({ orders = [], isLoading, onOrderUpdate, on
                                 <button
                                   type="button"
                                   onClick={() => onSelectTab('refunds')}
-                                  className="text-[10px] uppercase tracking-widest text-white underline underline-offset-4 hover:text-neutral-400"
+                                  className="text-[10px] uppercase tracking-widest text-white underline underline-offset-4 hover:text-neutral-400 cursor-pointer"
                                 >
                                   Track Refund Status →
                                 </button>
